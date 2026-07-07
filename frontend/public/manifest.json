@@ -1,0 +1,10 @@
+{
+  "name": "Teeolud — Road Conditions EE",
+  "short_name": "Teeolud",
+  "description": "Live Estonian road weather, camera, and hazard map with precise location-based alerts.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0071e3",
+  "icons": []
+}

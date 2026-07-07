@@ -1,0 +1,29 @@
+{
+  "appName": "Teeolud",
+  "layers": {
+    "weatherStations": "Ilmajaamad",
+    "cameras": "Teekaamerad",
+    "hazards": "Liiklusohud"
+  },
+  "attribution": "Andmed: Transpordiamet (Tark Tee). Kaart: OpenStreetMap panustajad.",
+  "info": {
+    "openButton": "Teave ja abi",
+    "close": "Sulge",
+    "aboutTitle": "Teave",
+    "aboutBody": "Teeolud on sõltumatu, mitteametlik täiendus Eesti ametlikule Tark Tee teeolude teenusele. Näidatakse sama avalikku Maanteeameti/Transpordiameti andmestikku, lihtsamas mobiilisõbralikus kaardis.",
+    "aboutBodyExtra": "Autor Maris, arendaja, kes tahtis kiiremat viisi teeolude vaatamiseks ilma Tark Tee segase kaardi ja kohmaka meilipõhise teavituse läbi kaevamata. Tegemist on väikese isikliku projektiga, mis ei ole Transpordiametiga seotud ega selle poolt heaks kiidetud — kui midagi siin on valesti, on see selle projekti, mitte nende viga.",
+    "legendTitle": "Legend",
+    "legendWeatherStations": "Ilmajaamad — puuduta jaama enda toimimise oleku nägemiseks: roheline = korras, kollane = andmekvaliteet langenud, punane = jaam ei edasta andmeid.",
+    "legendCameras": "Teekaamerad — puuduta kaamera asukoha nägemiseks. Otsepildi vaatamine on tasuline funktsioon.",
+    "legendHazards": "Liiklusohud — puuduta libeda tee, õnnetuste, teetööde ja muude hoiatuste üksikasjade nägemiseks.",
+    "legendClusters": "Numbriga ringid on lähestikuste märkide kobarad — puuduta suurendamiseks.",
+    "howToTitle": "Kuidas kasutada",
+    "howTo1": "Suumi näpuliigutuse või kerimisega, liiguta kaarti lohistades.",
+    "howTo2": "Puuduta märki, et näha üksikasju.",
+    "howTo3": "Puuduta numbriga kobarat, et sinna sisse suumida.",
+    "dataTitle": "Andmed ja viited",
+    "supportTitle": "Toeta",
+    "supportBody": "Kui sellest on sulle kasu, võid",
+    "supportLink": "osta mulle kohvi"
+  }
+}

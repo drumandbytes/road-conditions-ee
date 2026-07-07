@@ -1,0 +1,17 @@
+{
+  "rules": [
+    {
+      "allowed": {
+        "origins": [
+          "https://road-conditions-ee.pages.dev",
+          "https://*.road-conditions-ee.pages.dev",
+          "http://localhost:5173"
+        ],
+        "methods": ["GET", "HEAD"],
+        "headers": ["Range"]
+      },
+      "expose_headers": ["Content-Range", "Content-Length", "Content-Type", "ETag", "Accept-Ranges"],
+      "max_age_seconds": 3600
+    }
+  ]
+}

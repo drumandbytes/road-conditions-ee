@@ -1,0 +1,32 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "sensors": [
+          { "sourceType": "FIXED_WEATHER_STATION", "sourceIdType": "SOURCE_NAME", "name": "PMU701_1", "id": 479, "removedAt": null, "status": "ACTIVE" },
+          { "sourceType": "FIXED_WEATHER_STATION", "sourceIdType": "SOURCE_NAME", "name": "WMT700_1", "id": 480, "removedAt": null, "status": "ACTIVE" }
+        ],
+        "name": "Uku",
+        "id": 315,
+        "type": "VAISALA_RWS200"
+      },
+      "geometry": { "type": "Point", "coordinates": [26.01581, 59.39007, 88.0] },
+      "id": "315"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "sensors": [
+          { "sourceType": "FIXED_WEATHER_STATION", "sourceIdType": "SOURCE_NAME", "name": "PMU701_1", "id": 486, "removedAt": null, "status": "ACTIVE" }
+        ],
+        "name": "Veneküla",
+        "id": 313,
+        "type": "VAISALA_RWS200"
+      },
+      "geometry": { "type": "Point", "coordinates": [24.7, 59.1, 42.0] },
+      "id": "313"
+    }
+  ]
+}

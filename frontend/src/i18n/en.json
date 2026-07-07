@@ -1,0 +1,29 @@
+{
+  "appName": "Road Conditions",
+  "layers": {
+    "weatherStations": "Weather stations",
+    "cameras": "Road cameras",
+    "hazards": "Hazards"
+  },
+  "attribution": "Data: Transpordiamet (Tark Tee). Map: OpenStreetMap contributors.",
+  "info": {
+    "openButton": "About & help",
+    "close": "Close",
+    "aboutTitle": "About",
+    "aboutBody": "Teeolud is an independent, unofficial companion to Estonia's official Tark Tee road-conditions service. It shows the same public data from the Transport Administration (Transpordiamet), in a cleaner, mobile-first map.",
+    "aboutBodyExtra": "Built by Maris, a developer who wanted a faster way to check road conditions without digging through Tark Tee's cluttered map and coarse email alerts. It's a small personal project, not affiliated with or endorsed by Transpordiamet — if something here looks wrong, that's on this project, not them.",
+    "legendTitle": "Legend",
+    "legendWeatherStations": "Weather stations — tap for the station's own reporting health: green = normal, amber = degraded data quality, red = not reporting.",
+    "legendCameras": "Road cameras — tap for the camera's location. Viewing the live image is a paid feature.",
+    "legendHazards": "Hazards — tap for details on slippery roads, accidents, roadworks, and other alerts.",
+    "legendClusters": "Numbered circles are clusters of nearby markers — tap one to zoom in.",
+    "howToTitle": "How to use",
+    "howTo1": "Pinch or scroll to zoom, drag to pan.",
+    "howTo2": "Tap any marker for details.",
+    "howTo3": "Tap a numbered cluster to zoom into it.",
+    "dataTitle": "Data & attribution",
+    "supportTitle": "Support",
+    "supportBody": "If this is useful to you, you can",
+    "supportLink": "buy me a coffee"
+  }
+}

@@ -1,0 +1,15 @@
+name = "road-conditions-api-worker"
+main = "index.ts"
+compatibility_date = "2026-01-01"
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+
+[[d1_databases]]
+binding = "DB"
+database_name = "road-conditions"
+database_id = "b4a456a7-c3f3-4a1e-95e5-4a8b7af4deb1"
+
+# TODO Phase 5: add [[routes]] once the frontend/API domain split is decided
+# (see "Domain" open question in the plan). Deploys to *.workers.dev until then.

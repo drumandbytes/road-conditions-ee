@@ -1,0 +1,29 @@
+name: Deploy api-worker
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'api-worker/**'
+      - '.github/workflows/deploy-api-worker.yml'
+
+jobs:
+  deploy:
+    name: Deploy api-worker
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api-worker
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: api-worker/package-lock.json
+      - run: npm ci
+      - uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: api-worker

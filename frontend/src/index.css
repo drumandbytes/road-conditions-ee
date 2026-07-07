@@ -1,0 +1,135 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  color-scheme: light dark;
+  font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.app-header {
+  padding: 0.5rem 1rem;
+  font-size: 0.85rem;
+}
+
+.map-container {
+  flex: 1;
+  position: relative; /* MapLibre positions its canvas/controls absolutely within this */
+}
+
+.info-button {
+  position: absolute;
+  bottom: 1rem;
+  left: 1rem;
+  z-index: 10;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  border: none;
+  background: #fff;
+  color: #333;
+  font-size: 1.2rem;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+}
+
+.info-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.info-panel {
+  position: relative;
+  width: 100%;
+  max-width: 32rem;
+  max-height: 80vh;
+  overflow-y: auto;
+  background: #fff;
+  color: #1a1a1a;
+  border-radius: 1rem 1rem 0 0;
+  padding: 1.5rem;
+}
+
+.info-panel h2 {
+  font-size: 1rem;
+  margin: 1.25rem 0 0.5rem;
+}
+
+.info-panel h2:first-child {
+  margin-top: 0;
+}
+
+.info-panel p,
+.info-panel li {
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.info-panel ul {
+  list-style: none;
+}
+
+.info-panel li {
+  margin-bottom: 0.5rem;
+}
+
+.info-panel-close {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  border: none;
+  background: none;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  color: #666;
+}
+
+.locale-toggle {
+  display: flex;
+  gap: 0.25rem;
+  margin-bottom: 0.5rem;
+}
+
+.locale-button {
+  border: 1px solid #ccc;
+  background: #fff;
+  color: #333;
+  border-radius: 0.4rem;
+  padding: 0.2rem 0.6rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.locale-button-active {
+  background: #333;
+  color: #fff;
+  border-color: #333;
+}
+
+.legend-dot {
+  display: inline-block;
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 50%;
+  margin-right: 0.25rem;
+}

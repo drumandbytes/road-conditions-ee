@@ -1,0 +1,15 @@
+{
+  "name": "road-conditions-ee",
+  "private": true,
+  "scripts": {
+    "lint": "eslint ingest-worker/index.ts ingest-worker/src api-worker/index.ts api-worker/src frontend/src",
+    "deploy:ingest-worker": "cd ingest-worker && npm install && npm run deploy",
+    "deploy:api-worker": "cd api-worker && npm install && npm run deploy",
+    "deploy:frontend": "cd frontend && npm install && npm run build && npm run deploy",
+    "deploy:all": "npm run deploy:ingest-worker && npm run deploy:api-worker && npm run deploy:frontend"
+  },
+  "devDependencies": {
+    "eslint": "^10.1.0",
+    "typescript-eslint": "^8.57.1"
+  }
+}
