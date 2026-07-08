@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { Protocol } from "pmtiles";
@@ -102,6 +102,11 @@ interface MapProps {
 
 export function Map({ onCameraClick }: MapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  // Gates the loading overlay — without this, a slow or interrupted tile fetch (confirmed:
+  // reloading mid-fetch reliably reproduces it) leaves a half-drawn map on screen with no
+  // indication it's still loading, which reads as broken rather than "in progress."
+  const [tilesReady, setTilesReady] = useState(false);
+  const [dataReady, setDataReady] = useState(false);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -134,7 +139,34 @@ export function Map({ onCameraClick }: MapProps) {
     // Explicit fitBounds() instead of the constructor's `bounds` option — the constructor
     // option didn't reliably take effect (confirmed: deployed map showed a default
     // zoomed-out view of Northern Europe/Russia instead of fitting to Estonia).
-    map.fitBounds(ESTONIA_BOUNDS, { padding: 20, animate: false });
+    //
+    // Re-running it on every "resize" until the user actually interacts fixes a real race,
+    // confirmed by reproducing it directly: MapLibre reads the container's size synchronously
+    // at construction time, and on a fresh page load that size isn't always settled yet — it
+    // can even settle across *multiple* resize steps, not just one — so fitBounds computes the
+    // wrong zoom/center against a stale size. MapLibre's own ResizeObserver later corrects the
+    // *canvas* size once layout settles, firing "resize" event(s), but never recomputes the
+    // fit itself, so the wrong center/zoom persists on an otherwise correctly-sized canvas.
+    // Stop once the user has actually panned/zoomed (checking `originalEvent`, which MapLibre
+    // only attaches to gesture-driven camera changes, not our own programmatic fitBounds
+    // calls) so a later legitimate window resize doesn't snap their view back to Estonia.
+    const fitToEstonia = () => map.fitBounds(ESTONIA_BOUNDS, { padding: 20, animate: false });
+    fitToEstonia();
+    let userHasInteracted = false;
+    map.on("dragstart", (e) => {
+      if (e.originalEvent) userHasInteracted = true;
+    });
+    map.on("zoomstart", (e) => {
+      if (e.originalEvent) userHasInteracted = true;
+    });
+    map.on("resize", () => {
+      if (!userHasInteracted) fitToEstonia();
+    });
+    // "load" (initial style + viewport tiles in) rather than "idle" — idle also waits out
+    // symbol/glyph placement work, which never quiesces here because of the pre-existing
+    // "Open Sans" fallback-font 404 (MapLibre's own default, retried continuously) — confirmed
+    // this makes idle simply never fire, which would leave the loading overlay stuck forever.
+    map.once("load", () => setTilesReady(true));
 
     map.addControl(new maplibregl.NavigationControl(), "top-right");
     map.addControl(new maplibregl.GeolocateControl({ positionOptions: { enableHighAccuracy: true } }), "top-right");
@@ -148,11 +180,21 @@ export function Map({ onCameraClick }: MapProps) {
           });
           addClusteredSource(map, "hazards", hazards);
         })
-        .catch((err) => console.error("Failed to load map data layers", err));
+        .catch((err) => console.error("Failed to load map data layers", err))
+        .finally(() => setDataReady(true));
     });
 
     return () => map.remove();
   }, []);
 
-  return <div ref={containerRef} class="map-container" />;
+  return (
+    <div class="map-container">
+      <div ref={containerRef} class="map-canvas-container" />
+      {!(tilesReady && dataReady) && (
+        <div class="map-loading-overlay">
+          <div class="map-loading-spinner" />
+        </div>
+      )}
+    </div>
+  );
 }

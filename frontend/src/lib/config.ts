@@ -1,7 +1,7 @@
-// Public dev URL for the tiles R2 bucket. Rate-limited, dev/testing only per Cloudflare's
-// own docs — swap for a custom domain before real launch (Phase 5 open question: which
-// domain to use).
-const TILES_BASE = "https://pub-3803bab99e72440281dd3cff58995fbc.r2.dev";
+// Custom domain for the tiles R2 bucket (Phase 5 item, done) — puts Cloudflare's cache in
+// front of R2, fixing the tile-loading lag the old r2.dev public dev URL had (that URL is
+// explicitly rate-limited/uncached per Cloudflare's own docs, dev/testing only).
+const TILES_BASE = "https://tiles.roadconditions.drumandbytes.ee";
 
 export const WORLD_TILES_URL = `${TILES_BASE}/world-low.pmtiles`;
 export const ESTONIA_TILES_URL = `${TILES_BASE}/estonia.pmtiles`;
