@@ -31,3 +31,7 @@ export async function getCameras(): Promise<GeoJSON.FeatureCollection> {
 export async function getHazards(): Promise<GeoJSON.FeatureCollection> {
   return (await apiFetch("/api/hazards")).json();
 }
+
+export async function fetchCameraImage(cameraId: string): Promise<Response> {
+  return apiFetch(`/api/cameras/${cameraId}/image`);
+}

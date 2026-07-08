@@ -21,6 +21,7 @@ function addClusteredSource(
   map: maplibregl.Map,
   id: keyof typeof CLUSTER_LAYER_PAINT,
   data: GeoJSON.FeatureCollection,
+  onPointClick?: (properties: Record<string, unknown>) => void,
 ) {
   map.addSource(id, { type: "geojson", data, cluster: true, clusterMaxZoom: 14, clusterRadius: 50 });
 
@@ -61,6 +62,10 @@ function addClusteredSource(
   map.on("click", `${id}-point`, (e) => {
     const feature = e.features?.[0];
     if (!feature || feature.geometry.type !== "Point") return;
+    if (onPointClick) {
+      onPointClick(feature.properties ?? {});
+      return;
+    }
     const coordinates = feature.geometry.coordinates.slice() as [number, number];
     const description = Object.entries(feature.properties ?? {})
       .map(([key, value]) => `<strong>${key}</strong>: ${value}`)
@@ -91,7 +96,11 @@ function addClusteredSource(
   }
 }
 
-export function Map() {
+interface MapProps {
+  onCameraClick: (id: string, name: string) => void;
+}
+
+export function Map({ onCameraClick }: MapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -134,7 +143,9 @@ export function Map() {
       Promise.all([getWeatherStations(), getCameras(), getHazards()])
         .then(([weatherStations, cameras, hazards]) => {
           addClusteredSource(map, "weatherStations", weatherStations);
-          addClusteredSource(map, "cameras", cameras);
+          addClusteredSource(map, "cameras", cameras, (properties) => {
+            onCameraClick(String(properties.id), String(properties.name));
+          });
           addClusteredSource(map, "hazards", hazards);
         })
         .catch((err) => console.error("Failed to load map data layers", err));

@@ -25,5 +25,11 @@
     "supportTitle": "Toeta",
     "supportBody": "Kui sellest on sulle kasu, võid",
     "supportLink": "osta mulle kohvi"
+  },
+  "cameraModal": {
+    "close": "Sulge",
+    "loading": "Otsepildi laadimine…",
+    "paywalled": "Otsepilt on tasuline funktsioon. Tellimused pole veel avatud — jälgi uuendusi.",
+    "error": "Selle kaamera pilti ei õnnestunud praegu laadida."
   }
 }

@@ -133,3 +133,50 @@ body,
   border-radius: 50%;
   margin-right: 0.25rem;
 }
+
+.camera-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 25;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.camera-modal {
+  position: relative;
+  background: #fff;
+  color: #1a1a1a;
+  border-radius: 0.75rem;
+  padding: 1.25rem;
+  max-width: 90vw;
+  max-height: 90vh;
+  overflow: auto;
+}
+
+.camera-modal h2 {
+  font-size: 1rem;
+  margin-bottom: 0.75rem;
+  padding-right: 1.5rem;
+}
+
+.camera-modal-image {
+  display: block;
+  max-width: 100%;
+  max-height: 70vh;
+  border-radius: 0.4rem;
+}
+
+.camera-modal-close {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  border: none;
+  background: none;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  color: #666;
+}

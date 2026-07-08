@@ -25,5 +25,11 @@
     "supportTitle": "Support",
     "supportBody": "If this is useful to you, you can",
     "supportLink": "buy me a coffee"
+  },
+  "cameraModal": {
+    "close": "Close",
+    "loading": "Loading live image…",
+    "paywalled": "Live camera images are a paid feature. Subscriptions aren't open yet — stay tuned.",
+    "error": "Couldn't load this camera's image right now."
   }
 }
