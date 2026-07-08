@@ -16,9 +16,10 @@ Full design/architecture background: see the plan document from the session that
 - `api-worker/` — Cloudflare Worker, pure API (no static assets). Serves map data to the
   frontend, gates paid routes (camera images, VMS, alerts) behind a Stripe-issued bearer
   token (Phase 3+).
-- `frontend/` — Vite + Preact + TypeScript PWA, deploys to Cloudflare Pages
-  (`road-conditions-ee.pages.dev`). MapLibre GL JS map (Phase 2), reading self-hosted
-  vector tiles from R2 (no third-party tile API).
+- `frontend/` — Vite + Preact + TypeScript PWA, deploys to Cloudflare Pages. Live at
+  `roadconditions.drumandbytes.ee` (also reachable at `road-conditions-ee.pages.dev`).
+  MapLibre GL JS map (Phase 2), reading self-hosted vector tiles from R2 (no third-party
+  tile API).
 - `shared/schema.sql` — single source of truth for the D1 schema (`road-conditions`
   database), applied via `wrangler d1 execute --file=shared/schema.sql --remote`.
 

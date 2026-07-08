@@ -8,6 +8,7 @@
 // (Vite's default port) explicitly; nothing else.
 const ALLOWED_ORIGIN_PATTERNS = [
   /^https:\/\/([a-z0-9]+\.)?road-conditions-ee\.pages\.dev$/,
+  /^https:\/\/roadconditions\.drumandbytes\.ee$/,
   /^http:\/\/localhost:5173$/,
 ];
 

@@ -5,6 +5,7 @@
         "origins": [
           "https://road-conditions-ee.pages.dev",
           "https://*.road-conditions-ee.pages.dev",
+          "https://roadconditions.drumandbytes.ee",
           "http://localhost:5173"
         ],
         "methods": ["GET", "HEAD"],

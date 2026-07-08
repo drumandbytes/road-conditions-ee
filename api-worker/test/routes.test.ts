@@ -146,6 +146,11 @@ describe("CORS", () => {
     expect(isAllowedOrigin("https://evil.example.com")).toBe(false);
   });
 
+  it("allows the roadconditions.drumandbytes.ee custom domain", () => {
+    expect(isAllowedOrigin("https://roadconditions.drumandbytes.ee")).toBe(true);
+    expect(isAllowedOrigin("https://evil.drumandbytes.ee")).toBe(false);
+  });
+
   it("never uses a wildcard origin", () => {
     const headers = corsHeaders("https://road-conditions-ee.pages.dev");
     expect(headers["Access-Control-Allow-Origin"]).not.toBe("*");
