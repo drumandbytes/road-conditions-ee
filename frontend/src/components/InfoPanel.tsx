@@ -1,4 +1,5 @@
 import { useState } from "preact/hooks";
+import { AccountPanel } from "./AccountPanel";
 
 const COFFEE_LINK = "https://buymeacoffee.com/justmaris";
 
@@ -26,6 +27,14 @@ interface InfoPanelProps {
       supportTitle: string;
       supportBody: string;
       supportLink: string;
+    };
+    account: {
+      title: string;
+      subscribeBody: string;
+      subscribeButton: string;
+      activeBody: string;
+      manageButton: string;
+      error: string;
     };
   };
   locale: Locale;
@@ -63,6 +72,8 @@ export function InfoPanel({ t, locale, onLocaleChange }: InfoPanelProps) {
             <h2>{t.info.aboutTitle}</h2>
             <p>{t.info.aboutBody}</p>
             <p>{t.info.aboutBodyExtra}</p>
+
+            <AccountPanel t={t} />
 
             <h2>{t.info.legendTitle}</h2>
             <ul>

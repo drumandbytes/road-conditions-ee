@@ -1,7 +1,7 @@
 import { authenticatePaidUser } from "./src/auth";
 import { corsHeaders, handlePreflight, isAllowedOrigin } from "./src/cors";
 import { handleCameraImage, handleCameras } from "./src/routes/cameras";
-import { handleCheckout } from "./src/routes/checkout";
+import { handleCheckout, handleCheckoutSession, handlePortal } from "./src/routes/checkout";
 import { handleHazards } from "./src/routes/hazards";
 import { handleStripeWebhook } from "./src/routes/stripe-webhook";
 import { handleSubscribe, handleUnsubscribe } from "./src/routes/subscribe";
@@ -10,6 +10,8 @@ import { handleWeatherStations } from "./src/routes/weather";
 
 interface Env {
   DB: D1Database;
+  STRIPE_SECRET_KEY?: string;
+  STRIPE_WEBHOOK_SECRET?: string;
 }
 
 export default {
@@ -63,13 +65,28 @@ async function route(request: Request, env: Env): Promise<Response> {
     const user = await authenticatePaidUser(env.DB, request);
     return handleUnsubscribe(unsubscribeMatch[1], env.DB, user);
   }
+  if (method === "GET" && pathname === "/api/me") {
+    const user = await authenticatePaidUser(env.DB, request);
+    return user
+      ? Response.json({ email: user.email, subscriptionStatus: user.subscription_status })
+      : Response.json({ error: "Not authenticated" }, { status: 401 });
+  }
+  if (method === "POST" && pathname === "/api/portal") {
+    const user = await authenticatePaidUser(env.DB, request);
+    return handlePortal(user, env);
+  }
 
   // Stripe integration.
   if (method === "POST" && pathname === "/api/checkout") {
-    return handleCheckout(request);
+    return handleCheckout(env);
+  }
+  if (method === "GET" && pathname === "/api/checkout/session") {
+    const sessionId = url.searchParams.get("session_id");
+    if (!sessionId) return Response.json({ error: "Missing session_id" }, { status: 400 });
+    return handleCheckoutSession(sessionId, env);
   }
   if (method === "POST" && pathname === "/api/stripe-webhook") {
-    return handleStripeWebhook(request);
+    return handleStripeWebhook(request, env);
   }
 
   return Response.json({ error: "Not found" }, { status: 404 });

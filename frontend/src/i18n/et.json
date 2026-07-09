@@ -29,7 +29,15 @@
   "cameraModal": {
     "close": "Sulge",
     "loading": "Otsepildi laadimine…",
-    "paywalled": "Otsepilt on tasuline funktsioon. Tellimused pole veel avatud — jälgi uuendusi.",
+    "paywalled": "Otsepilt on tasuline funktsioon. Tellimiseks ava ⓘ menüü.",
     "error": "Selle kaamera pilti ei õnnestunud praegu laadida."
+  },
+  "account": {
+    "title": "Konto",
+    "subscribeBody": "Telli hinnaga 2,99 €/kuus, et avada otsepildid kaameratest ja (peagi) asukohapõhised teavitused.",
+    "subscribeButton": "Telli",
+    "activeBody": "Oled tellija — otsepildid kaameratest on avatud.",
+    "manageButton": "Halda tellimust",
+    "error": "Midagi läks valesti. Proovi hetke pärast uuesti."
   }
 }

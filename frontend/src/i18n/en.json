@@ -29,7 +29,15 @@
   "cameraModal": {
     "close": "Close",
     "loading": "Loading live image…",
-    "paywalled": "Live camera images are a paid feature. Subscriptions aren't open yet — stay tuned.",
+    "paywalled": "Live camera images are a paid feature. Open the ⓘ menu to subscribe.",
     "error": "Couldn't load this camera's image right now."
+  },
+  "account": {
+    "title": "Account",
+    "subscribeBody": "Subscribe for €2.99/month to unlock live camera images and (soon) location-based push alerts.",
+    "subscribeButton": "Subscribe",
+    "activeBody": "You're subscribed — live camera images are unlocked.",
+    "manageButton": "Manage subscription",
+    "error": "Something went wrong. Try again in a moment."
   }
 }

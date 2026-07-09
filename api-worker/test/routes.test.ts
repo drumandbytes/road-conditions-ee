@@ -2,8 +2,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { handleWeatherStations } from "../src/routes/weather";
 import { handleCameraImage, handleCameras } from "../src/routes/cameras";
 import { handleHazards } from "../src/routes/hazards";
+import { handleCheckout, handleCheckoutSession, handlePortal } from "../src/routes/checkout";
+import { handleStripeWebhook } from "../src/routes/stripe-webhook";
 import { corsHeaders, handlePreflight, isAllowedOrigin } from "../src/cors";
 import { authenticatePaidUser } from "../src/auth";
+import { updateSubscriptionStatusByStripeCustomerId, upsertUserFromStripe } from "../src/db";
 import type { UserRow } from "../src/db";
 
 /** Minimal D1Database fake — enough of the prepare/bind/all/first chain for these routes,
@@ -181,5 +184,187 @@ describe("authenticatePaidUser", () => {
     const req = new Request("https://example.com/api/vms", { headers: { Authorization: "Bearer tok" } });
     const user = await authenticatePaidUser(db, req);
     expect(user?.id).toBe("u1");
+  });
+});
+
+/** Like fakeDb, but also records the bound args of the last prepared statement — needed to
+ *  assert what the Stripe upsert/update helpers actually send to D1. */
+function fakeDbCapturing(returningRow: unknown) {
+  const calls: unknown[][] = [];
+  const db = {
+    prepare: () => ({
+      bind: (...args: unknown[]) => {
+        calls.push(args);
+        return { first: async () => returningRow, run: async () => ({ success: true }) };
+      },
+    }),
+  } as unknown as D1Database;
+  return { db, calls };
+}
+
+function mockFetchJson(status: number, body: unknown) {
+  return vi.fn().mockResolvedValue(new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } }));
+}
+
+describe("upsertUserFromStripe", () => {
+  it("binds a freshly-generated id/bearer_token alongside the given Stripe fields", async () => {
+    const returningRow: UserRow = {
+      id: "generated-id",
+      email: "a@b.com",
+      stripe_customer_id: "cus_1",
+      subscription_status: "active",
+      bearer_token: "generated-token",
+    };
+    const { db, calls } = fakeDbCapturing(returningRow);
+
+    const user = await upsertUserFromStripe(db, {
+      stripeCustomerId: "cus_1",
+      email: "a@b.com",
+      subscriptionStatus: "active",
+    });
+
+    expect(user).toEqual(returningRow);
+    const [id, email, stripeCustomerId, subscriptionStatus, bearerToken] = calls[0];
+    expect(email).toBe("a@b.com");
+    expect(stripeCustomerId).toBe("cus_1");
+    expect(subscriptionStatus).toBe("active");
+    expect(typeof id).toBe("string");
+    expect(typeof bearerToken).toBe("string");
+    // Real randomness, not placeholders — a returning customer must not get a predictable token.
+    expect((id as string).length).toBeGreaterThan(0);
+    expect((bearerToken as string).length).toBeGreaterThan(0);
+  });
+});
+
+describe("updateSubscriptionStatusByStripeCustomerId", () => {
+  it("binds the new status and the customer id to filter by", async () => {
+    const { db, calls } = fakeDbCapturing(null);
+    await updateSubscriptionStatusByStripeCustomerId(db, "cus_1", "canceled");
+    expect(calls[0]).toEqual(["canceled", "cus_1"]);
+  });
+});
+
+describe("handleCheckout", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("returns 503 when Stripe isn't configured", async () => {
+    const res = await handleCheckout({});
+    expect(res.status).toBe(503);
+  });
+
+  it("returns the Stripe-hosted checkout URL on success", async () => {
+    vi.stubGlobal("fetch", mockFetchJson(200, { id: "cs_test_1", url: "https://checkout.stripe.com/pay/cs_test_1" }));
+    const res = await handleCheckout({ STRIPE_SECRET_KEY: "sk_test_x" });
+    const body = (await res.json()) as { url: string };
+    expect(body.url).toBe("https://checkout.stripe.com/pay/cs_test_1");
+  });
+});
+
+describe("handleCheckoutSession", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("returns 503 when Stripe isn't configured", async () => {
+    const res = await handleCheckoutSession("cs_1", { DB: fakeDb([]) });
+    expect(res.status).toBe(503);
+  });
+
+  it("returns 402 when the session hasn't actually been paid", async () => {
+    vi.stubGlobal("fetch", mockFetchJson(200, { id: "cs_1", customer: "cus_1", payment_status: "unpaid" }));
+    const res = await handleCheckoutSession("cs_1", { STRIPE_SECRET_KEY: "sk_test_x", DB: fakeDb([]) });
+    expect(res.status).toBe(402);
+  });
+
+  it("upserts the user and returns their bearer token on a paid session", async () => {
+    vi.stubGlobal(
+      "fetch",
+      mockFetchJson(200, {
+        id: "cs_1",
+        customer: "cus_1",
+        payment_status: "paid",
+        customer_details: { email: "a@b.com" },
+      }),
+    );
+    const { db } = fakeDbCapturing({
+      id: "u1",
+      email: "a@b.com",
+      stripe_customer_id: "cus_1",
+      subscription_status: "active",
+      bearer_token: "tok123",
+    });
+    const res = await handleCheckoutSession("cs_1", { STRIPE_SECRET_KEY: "sk_test_x", DB: db });
+    const body = (await res.json()) as { bearerToken: string };
+    expect(body.bearerToken).toBe("tok123");
+  });
+});
+
+describe("handlePortal", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const activeUser: UserRow = {
+    id: "u1",
+    email: "a@b.com",
+    stripe_customer_id: "cus_1",
+    subscription_status: "active",
+    bearer_token: "tok",
+  };
+
+  it("returns 402 when there is no authenticated user", async () => {
+    const res = await handlePortal(null, {});
+    expect(res.status).toBe(402);
+  });
+
+  it("returns 503 when Stripe isn't configured", async () => {
+    const res = await handlePortal(activeUser, {});
+    expect(res.status).toBe(503);
+  });
+
+  it("returns 404 when the user has no Stripe customer id on file", async () => {
+    const res = await handlePortal({ ...activeUser, stripe_customer_id: null }, { STRIPE_SECRET_KEY: "sk_test_x" });
+    expect(res.status).toBe(404);
+  });
+
+  it("returns the Stripe billing portal URL on success", async () => {
+    vi.stubGlobal("fetch", mockFetchJson(200, { url: "https://billing.stripe.com/session/x" }));
+    const res = await handlePortal(activeUser, { STRIPE_SECRET_KEY: "sk_test_x" });
+    const body = (await res.json()) as { url: string };
+    expect(body.url).toBe("https://billing.stripe.com/session/x");
+  });
+});
+
+describe("handleStripeWebhook", () => {
+  it("returns 503 when Stripe isn't configured", async () => {
+    const req = new Request("https://example.com/api/stripe-webhook", { method: "POST", body: "{}" });
+    const res = await handleStripeWebhook(req, { DB: fakeDb([]) });
+    expect(res.status).toBe(503);
+  });
+
+  it("returns 400 when the Stripe-Signature header is missing", async () => {
+    const req = new Request("https://example.com/api/stripe-webhook", { method: "POST", body: "{}" });
+    const res = await handleStripeWebhook(req, {
+      STRIPE_SECRET_KEY: "sk_test_x",
+      STRIPE_WEBHOOK_SECRET: "whsec_x",
+      DB: fakeDb([]),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 400 when the signature doesn't verify", async () => {
+    const req = new Request("https://example.com/api/stripe-webhook", {
+      method: "POST",
+      body: "{}",
+      headers: { "Stripe-Signature": "t=1,v1=bogus" },
+    });
+    const res = await handleStripeWebhook(req, {
+      STRIPE_SECRET_KEY: "sk_test_x",
+      STRIPE_WEBHOOK_SECRET: "whsec_x",
+      DB: fakeDb([]),
+    });
+    expect(res.status).toBe(400);
   });
 });

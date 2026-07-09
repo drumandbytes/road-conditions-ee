@@ -6,6 +6,10 @@ CREATE TABLE users (
   bearer_token TEXT UNIQUE,                -- opaque, random; sent as Authorization: Bearer
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+-- SQLite allows multiple NULLs through a UNIQUE index (only non-NULL values are compared),
+-- so this doesn't block rows that haven't gone through Stripe yet. Required for the
+-- ON CONFLICT(stripe_customer_id) upsert in api-worker's checkout/webhook handlers.
+CREATE UNIQUE INDEX idx_users_stripe_customer_id ON users(stripe_customer_id);
 
 CREATE TABLE push_subscriptions (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

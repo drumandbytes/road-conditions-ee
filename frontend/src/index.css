@@ -215,3 +215,18 @@ body,
   cursor: pointer;
   color: #666;
 }
+
+.account-button {
+  background: #0071e3;
+  color: #fff;
+  border: none;
+  border-radius: 0.5rem;
+  padding: 0.6rem 1rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.account-button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}

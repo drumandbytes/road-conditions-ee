@@ -3,6 +3,7 @@ import { Map } from "./components/Map";
 import { InfoPanel } from "./components/InfoPanel";
 import { CameraModal } from "./components/CameraModal";
 import type { Locale } from "./components/InfoPanel";
+import { completeCheckoutSession, setBearerToken } from "./lib/api";
 import et from "./i18n/et.json";
 import en from "./i18n/en.json";
 
@@ -22,6 +23,28 @@ export function App() {
   useEffect(() => {
     localStorage.setItem(LOCALE_STORAGE_KEY, locale);
   }, [locale]);
+
+  // Runs once on mount, not tied to locale — this is Stripe redirecting back after checkout,
+  // not a locale-dependent concern. Clears the query params afterward either way (success or
+  // cancelled) so a page refresh doesn't re-trigger the completion call with a now-stale
+  // session_id.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const checkout = params.get("checkout");
+    if (checkout !== "success" && checkout !== "cancelled") return;
+
+    const sessionId = params.get("session_id");
+    const cleanUp = () => window.history.replaceState({}, "", window.location.pathname);
+
+    if (checkout === "success" && sessionId) {
+      completeCheckoutSession(sessionId)
+        .then((token) => setBearerToken(token))
+        .catch((err) => console.error("Failed to complete checkout", err))
+        .finally(cleanUp);
+    } else {
+      cleanUp();
+    }
+  }, []);
 
   return (
     <div class="app">

@@ -67,3 +67,44 @@ export async function getUserByBearerToken(db: D1Database, token: string): Promi
     .first<UserRow>();
   return row ?? null;
 }
+
+function randomHex(byteLength: number): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(byteLength));
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/** Idempotent upsert keyed by Stripe customer ID — safe to call from both the checkout
+ *  return-URL handler (fast path, issues the token the user actually sees) and the webhook
+ *  (authoritative path for ongoing status changes like renewals/cancellations). `id` and
+ *  `bearer_token` are only used on first insert; ON CONFLICT deliberately leaves them
+ *  untouched so a returning customer keeps the same token rather than getting a new one
+ *  every time their subscription status changes. */
+export async function upsertUserFromStripe(
+  db: D1Database,
+  params: { stripeCustomerId: string; email: string | null; subscriptionStatus: string },
+): Promise<UserRow> {
+  const row = await db
+    .prepare(
+      `INSERT INTO users (id, email, stripe_customer_id, subscription_status, bearer_token)
+       VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(stripe_customer_id) DO UPDATE SET
+         email = excluded.email,
+         subscription_status = excluded.subscription_status
+       RETURNING *`,
+    )
+    .bind(randomHex(16), params.email, params.stripeCustomerId, params.subscriptionStatus, randomHex(24))
+    .first<UserRow>();
+  if (!row) throw new Error("upsertUserFromStripe: RETURNING produced no row");
+  return row;
+}
+
+export async function updateSubscriptionStatusByStripeCustomerId(
+  db: D1Database,
+  stripeCustomerId: string,
+  subscriptionStatus: string,
+): Promise<void> {
+  await db
+    .prepare("UPDATE users SET subscription_status = ? WHERE stripe_customer_id = ?")
+    .bind(subscriptionStatus, stripeCustomerId)
+    .run();
+}
