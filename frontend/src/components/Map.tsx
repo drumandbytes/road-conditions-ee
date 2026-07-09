@@ -42,7 +42,15 @@ function addClusteredSource(
     type: "symbol",
     source: id,
     filter: ["has", "point_count"],
-    layout: { "text-field": "{point_count_abbreviated}", "text-size": 12 },
+    // text-font must be set explicitly — the style spec's default is "Open Sans Regular,
+    // Arial Unicode MS Regular", which our glyphs server (Protomaps' font CDN, only serves
+    // "Noto Sans ...") 404s on. Confirmed this exact layer as the source: it's the only
+    // symbol layer in the whole style without its own text-font (Protomaps' own layers()
+    // output sets it correctly on everything else), and the 404s were for digit codepoints
+    // matching cluster-count labels. This wasn't just cosmetic — the resulting continuous
+    // failed-glyph retry loop meant the map's "idle" event never fired, which is why the
+    // loading-overlay logic elsewhere had to rely on the weaker "load" event instead.
+    layout: { "text-field": "{point_count_abbreviated}", "text-size": 12, "text-font": ["Noto Sans Regular"] },
     paint: { "text-color": "#ffffff" },
   });
 
@@ -110,81 +118,102 @@ export function Map({ onCameraClick }: MapProps) {
 
   useEffect(() => {
     if (!containerRef.current) return;
+    const container = containerRef.current;
+    let map: maplibregl.Map | undefined;
+    let cancelled = false;
 
-    const map = new maplibregl.Map({
-      container: containerRef.current,
-      style: {
-        version: 8,
-        glyphs: "https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf",
-        sprite: "https://protomaps.github.io/basemaps-assets/sprites/v4/light",
-        sources: {
-          world: { type: "vector", url: `pmtiles://${WORLD_TILES_URL}`, attribution: "© OpenStreetMap contributors" },
-          estonia: { type: "vector", url: `pmtiles://${ESTONIA_TILES_URL}`, attribution: "© OpenStreetMap contributors" },
+    // Don't construct the Map until the container has a real, non-zero size. MapLibre reads
+    // the container's size synchronously at construction time, and on a fresh page load that
+    // size isn't always settled yet — confirmed this causes fitBounds to compute the wrong
+    // zoom/center against a stale size, and separately confirmed that *patching* this after
+    // the fact (re-running fitBounds on a later "resize" event) is itself fragile: it can leave
+    // the WebGL canvas rendering only part of its own (correctly-sized) area, permanently, not
+    // just transiently. Waiting for a real size upfront avoids the race entirely instead of
+    // trying to repair it after the fact.
+    const resizeObserver = new ResizeObserver((entries) => {
+      const { width, height } = entries[0].contentRect;
+      if (width === 0 || height === 0) return;
+      resizeObserver.disconnect();
+      if (cancelled) return;
+      initMap();
+    });
+    resizeObserver.observe(container);
+
+    function initMap() {
+      map = new maplibregl.Map({
+        container,
+        style: {
+          version: 8,
+          glyphs: "https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf",
+          sprite: "https://protomaps.github.io/basemaps-assets/sprites/v4/light",
+          sources: {
+            world: { type: "vector", url: `pmtiles://${WORLD_TILES_URL}`, attribution: "© OpenStreetMap contributors" },
+            estonia: { type: "vector", url: `pmtiles://${ESTONIA_TILES_URL}`, attribution: "© OpenStreetMap contributors" },
+          },
+          // world's layers first (bottom/backdrop), estonia's on top (full detail within its
+          // bounds) — see Phase 0 notes on why the backdrop layer exists at all.
+          //
+          // layers() generates fixed layer IDs (e.g. "roads_shields", "pois") regardless of
+          // the source name passed in — only the `source` field is parameterized, not `id`.
+          // Calling it twice for two sources produces duplicate IDs, which MapLibre rejects
+          // outright (confirmed: broke the deployed map with "duplicate layer id" errors for
+          // every layer). Fix: suffix one set's IDs to disambiguate.
+          layers: [
+            ...layers("world", namedFlavor("light"), { lang: "et" }).map((l) => ({ ...l, id: `${l.id}-world` })),
+            ...layers("estonia", namedFlavor("light"), { lang: "et" }),
+          ],
         },
-        // world's layers first (bottom/backdrop), estonia's on top (full detail within its
-        // bounds) — see Phase 0 notes on why the backdrop layer exists at all.
-        //
-        // layers() generates fixed layer IDs (e.g. "roads_shields", "pois") regardless of
-        // the source name passed in — only the `source` field is parameterized, not `id`.
-        // Calling it twice for two sources produces duplicate IDs, which MapLibre rejects
-        // outright (confirmed: broke the deployed map with "duplicate layer id" errors for
-        // every layer). Fix: suffix one set's IDs to disambiguate.
-        layers: [
-          ...layers("world", namedFlavor("light"), { lang: "et" }).map((l) => ({ ...l, id: `${l.id}-world` })),
-          ...layers("estonia", namedFlavor("light"), { lang: "et" }),
-        ],
-      },
-    });
+      });
 
-    // Explicit fitBounds() instead of the constructor's `bounds` option — the constructor
-    // option didn't reliably take effect (confirmed: deployed map showed a default
-    // zoomed-out view of Northern Europe/Russia instead of fitting to Estonia).
-    //
-    // Re-running it on every "resize" until the user actually interacts fixes a real race,
-    // confirmed by reproducing it directly: MapLibre reads the container's size synchronously
-    // at construction time, and on a fresh page load that size isn't always settled yet — it
-    // can even settle across *multiple* resize steps, not just one — so fitBounds computes the
-    // wrong zoom/center against a stale size. MapLibre's own ResizeObserver later corrects the
-    // *canvas* size once layout settles, firing "resize" event(s), but never recomputes the
-    // fit itself, so the wrong center/zoom persists on an otherwise correctly-sized canvas.
-    // Stop once the user has actually panned/zoomed (checking `originalEvent`, which MapLibre
-    // only attaches to gesture-driven camera changes, not our own programmatic fitBounds
-    // calls) so a later legitimate window resize doesn't snap their view back to Estonia.
-    const fitToEstonia = () => map.fitBounds(ESTONIA_BOUNDS, { padding: 20, animate: false });
-    fitToEstonia();
-    let userHasInteracted = false;
-    map.on("dragstart", (e) => {
-      if (e.originalEvent) userHasInteracted = true;
-    });
-    map.on("zoomstart", (e) => {
-      if (e.originalEvent) userHasInteracted = true;
-    });
-    map.on("resize", () => {
-      if (!userHasInteracted) fitToEstonia();
-    });
-    // "load" (initial style + viewport tiles in) rather than "idle" — idle also waits out
-    // symbol/glyph placement work, which never quiesces here because of the pre-existing
-    // "Open Sans" fallback-font 404 (MapLibre's own default, retried continuously) — confirmed
-    // this makes idle simply never fire, which would leave the loading overlay stuck forever.
-    map.once("load", () => setTilesReady(true));
+      // Explicit fitBounds() call (not the constructor's `bounds` option) — kept as the
+      // proven-reliable pattern from earlier testing; the ResizeObserver gate above is what
+      // actually fixes the race, this doesn't need to change too.
+      map.fitBounds(ESTONIA_BOUNDS, { padding: 20, animate: false });
 
-    map.addControl(new maplibregl.NavigationControl(), "top-right");
-    map.addControl(new maplibregl.GeolocateControl({ positionOptions: { enableHighAccuracy: true } }), "top-right");
+      // Defensive: even with a correctly-sized container at construction, still observed
+      // (repeatedly, in testing) a render where only *part* of the canvas gets painted — a
+      // gray/blank band for the rest — despite the canvas's width/height attributes, its WebGL
+      // drawing buffer size, and its gl.VIEWPORT all being independently verified correct and
+      // matching each other. So this isn't a sizing mismatch at the canvas/GL level. Directly
+      // confirmed what actually fixes it: any zoom interaction forces MapLibre to fully repaint
+      // and the gray band disappears — a single resize() alone wasn't enough. So force several
+      // repaints ourselves via triggerRepaint() across a few animation frames, standing in for
+      // the interaction a user would otherwise have to make to work around this themselves.
+      map.resize();
+      for (let i = 0; i < 5; i++) {
+        requestAnimationFrame(() => map!.triggerRepaint());
+      }
 
-    map.on("load", () => {
-      Promise.all([getWeatherStations(), getCameras(), getHazards()])
-        .then(([weatherStations, cameras, hazards]) => {
-          addClusteredSource(map, "weatherStations", weatherStations);
-          addClusteredSource(map, "cameras", cameras, (properties) => {
-            onCameraClick(String(properties.id), String(properties.name));
-          });
-          addClusteredSource(map, "hazards", hazards);
-        })
-        .catch((err) => console.error("Failed to load map data layers", err))
-        .finally(() => setDataReady(true));
-    });
+      // "idle" (no pending style/tile/glyph work at all) rather than "load" (only covers the
+      // very first viewport's tiles) — safe to rely on now that the container is guaranteed to
+      // be correctly sized at construction, and now that the cluster-count text-font fix above
+      // stops glyph 404s from retrying forever, which previously meant idle never fired at all.
+      // Persistent (not "once"): if idle fires once while some tiles are still incomplete for
+      // an unrelated reason, a one-shot listener would miss the later, truly-settled idle.
+      map.on("idle", () => setTilesReady(true));
 
-    return () => map.remove();
+      map.addControl(new maplibregl.NavigationControl(), "top-right");
+      map.addControl(new maplibregl.GeolocateControl({ positionOptions: { enableHighAccuracy: true } }), "top-right");
+
+      map.on("load", () => {
+        Promise.all([getWeatherStations(), getCameras(), getHazards()])
+          .then(([weatherStations, cameras, hazards]) => {
+            addClusteredSource(map!, "weatherStations", weatherStations);
+            addClusteredSource(map!, "cameras", cameras, (properties) => {
+              onCameraClick(String(properties.id), String(properties.name));
+            });
+            addClusteredSource(map!, "hazards", hazards);
+          })
+          .catch((err) => console.error("Failed to load map data layers", err))
+          .finally(() => setDataReady(true));
+      });
+    }
+
+    return () => {
+      cancelled = true;
+      resizeObserver.disconnect();
+      map?.remove();
+    };
   }, []);
 
   return (
