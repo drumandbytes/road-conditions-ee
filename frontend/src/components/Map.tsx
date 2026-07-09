@@ -158,9 +158,21 @@ export function Map({ onCameraClick }: MapProps) {
           // Calling it twice for two sources produces duplicate IDs, which MapLibre rejects
           // outright (confirmed: broke the deployed map with "duplicate layer id" errors for
           // every layer). Fix: suffix one set's IDs to disambiguate.
+          //
+          // estonia's layers get a minzoom floor: confirmed directly (by temporarily removing
+          // the estonia source/layers entirely) that the gray-band rendering bug only occurs
+          // when estonia's layers are active *and* the viewport extends beyond its own bounding
+          // box — matches a known MapLibre bug (github.com/maplibre/maplibre-gl-js/issues/5692,
+          // "incorrect handling of missing tiles with uneven [source] coverage"). Below zoom 6
+          // (the initial Estonia fit sits at ~6.04), the viewport routinely extends past
+          // Estonia's bbox anyway — that's the whole point of the world backdrop layer — so
+          // this floor is also just better UX/perf, not only a workaround.
           layers: [
             ...layers("world", namedFlavor("light"), { lang: "et" }).map((l) => ({ ...l, id: `${l.id}-world` })),
-            ...layers("estonia", namedFlavor("light"), { lang: "et" }),
+            ...layers("estonia", namedFlavor("light"), { lang: "et" }).map((l) => ({
+              ...l,
+              minzoom: Math.max(l.minzoom ?? 0, 6),
+            })),
           ],
         },
       });
@@ -170,19 +182,7 @@ export function Map({ onCameraClick }: MapProps) {
       // actually fixes the race, this doesn't need to change too.
       map.fitBounds(ESTONIA_BOUNDS, { padding: 20, animate: false });
 
-      // Defensive: even with a correctly-sized container at construction, still observed
-      // (repeatedly, in testing) a render where only *part* of the canvas gets painted — a
-      // gray/blank band for the rest — despite the canvas's width/height attributes, its WebGL
-      // drawing buffer size, and its gl.VIEWPORT all being independently verified correct and
-      // matching each other. So this isn't a sizing mismatch at the canvas/GL level. Directly
-      // confirmed what actually fixes it: any zoom interaction forces MapLibre to fully repaint
-      // and the gray band disappears — a single resize() alone wasn't enough. So force several
-      // repaints ourselves via triggerRepaint() across a few animation frames, standing in for
-      // the interaction a user would otherwise have to make to work around this themselves.
       map.resize();
-      for (let i = 0; i < 5; i++) {
-        requestAnimationFrame(() => map!.triggerRepaint());
-      }
 
       // "idle" (no pending style/tile/glyph work at all) rather than "load" (only covers the
       // very first viewport's tiles) — safe to rely on now that the container is guaranteed to
