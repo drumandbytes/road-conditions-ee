@@ -33,7 +33,6 @@ interface InfoPanelProps {
       subscribeBody: string;
       planMonthly: string;
       planYearly: string;
-      planLifetime: string;
       trialNote: string;
       activeBody: string;
       lifetimeBody: string;

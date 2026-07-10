@@ -3,10 +3,12 @@ CREATE TABLE users (
   email TEXT UNIQUE,
   stripe_customer_id TEXT,
   subscription_status TEXT NOT NULL DEFAULT 'free',  -- 'free' | 'active' | 'canceled' | 'lifetime'
-                                          -- 'lifetime' = one-time payment (or manual comp),
-                                          -- no Stripe subscription object exists for these
-                                          -- users, so no customer.subscription.* webhook can
-                                          -- ever downgrade them automatically — see checkout.ts
+                                          -- 'lifetime' = manually granted (self, chosen people)
+                                          -- via a direct row update, deliberately never sold —
+                                          -- see checkout.ts for why. No Stripe subscription
+                                          -- object exists for these users, so no
+                                          -- customer.subscription.* webhook can ever downgrade
+                                          -- them automatically.
   bearer_token TEXT UNIQUE,                -- opaque, random; sent as Authorization: Bearer
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );

@@ -37,13 +37,10 @@ export async function handleStripeWebhook(
       const session = event.data.object as Stripe.Checkout.Session;
       const customerId = typeof session.customer === "string" ? session.customer : session.customer?.id;
       if (customerId) {
-        // Same mode: "payment" vs "subscription" distinction as checkout.ts's session
-        // handler — see the comment there for why a lifetime purchase is safe from ever
-        // being auto-downgraded by the subscription webhooks below.
         await upsertUserFromStripe(env.DB, {
           stripeCustomerId: customerId,
           email: session.customer_details?.email ?? null,
-          subscriptionStatus: session.mode === "payment" ? "lifetime" : "active",
+          subscriptionStatus: "active",
         });
       }
       break;

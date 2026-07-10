@@ -56,7 +56,7 @@ export async function getAccountStatus(): Promise<AccountStatus | null> {
   return res.json();
 }
 
-export type Plan = "monthly" | "yearly" | "lifetime";
+export type Plan = "monthly" | "yearly";
 
 export async function startCheckout(plan: Plan): Promise<string> {
   const res = await apiFetch("/api/checkout", {

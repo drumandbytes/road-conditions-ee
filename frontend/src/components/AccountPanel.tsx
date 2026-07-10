@@ -16,7 +16,6 @@ interface AccountPanelProps {
       subscribeBody: string;
       planMonthly: string;
       planYearly: string;
-      planLifetime: string;
       trialNote: string;
       activeBody: string;
       lifetimeBody: string;
@@ -29,7 +28,6 @@ interface AccountPanelProps {
 const PLAN_LABEL_KEYS = {
   monthly: "planMonthly",
   yearly: "planYearly",
-  lifetime: "planLifetime",
 } as const satisfies Record<Plan, keyof AccountPanelProps["t"]["account"]>;
 
 export function AccountPanel({ t }: AccountPanelProps) {

@@ -286,17 +286,9 @@ describe("handleCheckout", () => {
     expect(sentBody).toContain("allow_promotion_codes=true");
   });
 
-  it("creates a one-time payment session for the lifetime plan, with no trial", async () => {
-    const fetchMock = mockFetchJson(200, { id: "cs_test_2", url: "https://checkout.stripe.com/pay/cs_test_2" });
-    vi.stubGlobal("fetch", fetchMock);
+  it("returns 400 for the (deliberately unsupported) lifetime plan — comps are manual, not sold", async () => {
     const res = await handleCheckout(checkoutRequest({ plan: "lifetime" }), { STRIPE_SECRET_KEY: "sk_test_x" });
-    expect(res.status).toBe(200);
-
-    const [, options] = fetchMock.mock.calls[0];
-    const sentBody = String(options.body);
-    expect(sentBody).toContain("mode=payment");
-    expect(sentBody).toContain("customer_creation=always");
-    expect(sentBody).not.toContain("trial_period_days");
+    expect(res.status).toBe(400);
   });
 });
 
@@ -338,27 +330,6 @@ describe("handleCheckoutSession", () => {
     expect(body.bearerToken).toBe("tok123");
   });
 
-  it("marks a one-time payment session (lifetime plan) with subscription_status 'lifetime'", async () => {
-    vi.stubGlobal(
-      "fetch",
-      mockFetchJson(200, {
-        id: "cs_2",
-        mode: "payment",
-        customer: "cus_2",
-        payment_status: "paid",
-        customer_details: { email: "a@b.com" },
-      }),
-    );
-    const { db, calls } = fakeDbCapturing({
-      id: "u2",
-      email: "a@b.com",
-      stripe_customer_id: "cus_2",
-      subscription_status: "lifetime",
-      bearer_token: "tok456",
-    });
-    await handleCheckoutSession("cs_2", { STRIPE_SECRET_KEY: "sk_test_x", DB: db });
-    expect(calls[0][3]).toBe("lifetime"); // upsertUserFromStripe binds subscriptionStatus 4th
-  });
 });
 
 describe("handlePortal", () => {
