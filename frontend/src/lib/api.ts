@@ -56,8 +56,14 @@ export async function getAccountStatus(): Promise<AccountStatus | null> {
   return res.json();
 }
 
-export async function startCheckout(): Promise<string> {
-  const res = await apiFetch("/api/checkout", { method: "POST" });
+export type Plan = "monthly" | "yearly" | "lifetime";
+
+export async function startCheckout(plan: Plan): Promise<string> {
+  const res = await apiFetch("/api/checkout", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ plan }),
+  });
   const body = (await res.json()) as { url?: string; error?: string };
   if (!body.url) throw new Error(body.error ?? "Failed to start checkout");
   return body.url;

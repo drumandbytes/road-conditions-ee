@@ -31,8 +31,12 @@ interface InfoPanelProps {
     account: {
       title: string;
       subscribeBody: string;
-      subscribeButton: string;
+      planMonthly: string;
+      planYearly: string;
+      planLifetime: string;
+      trialNote: string;
       activeBody: string;
+      lifetimeBody: string;
       manageButton: string;
       error: string;
     };

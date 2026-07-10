@@ -13,6 +13,6 @@ export async function authenticatePaidUser(
   if (!token) return null;
 
   const user = await getUserByBearerToken(db, token);
-  if (!user || user.subscription_status !== "active") return null;
+  if (!user || (user.subscription_status !== "active" && user.subscription_status !== "lifetime")) return null;
   return user;
 }

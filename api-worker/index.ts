@@ -78,7 +78,7 @@ async function route(request: Request, env: Env): Promise<Response> {
 
   // Stripe integration.
   if (method === "POST" && pathname === "/api/checkout") {
-    return handleCheckout(env);
+    return handleCheckout(request, env);
   }
   if (method === "GET" && pathname === "/api/checkout/session") {
     const sessionId = url.searchParams.get("session_id");

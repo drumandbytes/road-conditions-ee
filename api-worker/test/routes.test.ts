@@ -185,6 +185,13 @@ describe("authenticatePaidUser", () => {
     const user = await authenticatePaidUser(db, req);
     expect(user?.id).toBe("u1");
   });
+
+  it("also grants access to a lifetime user (never expires, no recurring subscription)", async () => {
+    const db = fakeDb([{ id: "u1", subscription_status: "lifetime", bearer_token: "tok" }]);
+    const req = new Request("https://example.com/api/vms", { headers: { Authorization: "Bearer tok" } });
+    const user = await authenticatePaidUser(db, req);
+    expect(user?.id).toBe("u1");
+  });
 });
 
 /** Like fakeDb, but also records the bound args of the last prepared statement — needed to
@@ -244,21 +251,52 @@ describe("updateSubscriptionStatusByStripeCustomerId", () => {
   });
 });
 
+function checkoutRequest(body: unknown) {
+  return new Request("https://example.com/api/checkout", { method: "POST", body: JSON.stringify(body) });
+}
+
 describe("handleCheckout", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
   it("returns 503 when Stripe isn't configured", async () => {
-    const res = await handleCheckout({});
+    const res = await handleCheckout(checkoutRequest({ plan: "monthly" }), {});
     expect(res.status).toBe(503);
   });
 
-  it("returns the Stripe-hosted checkout URL on success", async () => {
-    vi.stubGlobal("fetch", mockFetchJson(200, { id: "cs_test_1", url: "https://checkout.stripe.com/pay/cs_test_1" }));
-    const res = await handleCheckout({ STRIPE_SECRET_KEY: "sk_test_x" });
+  it("returns 400 for a missing or invalid plan", async () => {
+    const res = await handleCheckout(checkoutRequest({}), { STRIPE_SECRET_KEY: "sk_test_x" });
+    expect(res.status).toBe(400);
+    const res2 = await handleCheckout(checkoutRequest({ plan: "weekly" }), { STRIPE_SECRET_KEY: "sk_test_x" });
+    expect(res2.status).toBe(400);
+  });
+
+  it("returns the Stripe-hosted checkout URL for a monthly plan with a trial", async () => {
+    const fetchMock = mockFetchJson(200, { id: "cs_test_1", url: "https://checkout.stripe.com/pay/cs_test_1" });
+    vi.stubGlobal("fetch", fetchMock);
+    const res = await handleCheckout(checkoutRequest({ plan: "monthly" }), { STRIPE_SECRET_KEY: "sk_test_x" });
     const body = (await res.json()) as { url: string };
     expect(body.url).toBe("https://checkout.stripe.com/pay/cs_test_1");
+
+    const [, options] = fetchMock.mock.calls[0];
+    const sentBody = String(options.body);
+    expect(sentBody).toContain("mode=subscription");
+    expect(sentBody).toContain("subscription_data[trial_period_days]=30");
+    expect(sentBody).toContain("allow_promotion_codes=true");
+  });
+
+  it("creates a one-time payment session for the lifetime plan, with no trial", async () => {
+    const fetchMock = mockFetchJson(200, { id: "cs_test_2", url: "https://checkout.stripe.com/pay/cs_test_2" });
+    vi.stubGlobal("fetch", fetchMock);
+    const res = await handleCheckout(checkoutRequest({ plan: "lifetime" }), { STRIPE_SECRET_KEY: "sk_test_x" });
+    expect(res.status).toBe(200);
+
+    const [, options] = fetchMock.mock.calls[0];
+    const sentBody = String(options.body);
+    expect(sentBody).toContain("mode=payment");
+    expect(sentBody).toContain("customer_creation=always");
+    expect(sentBody).not.toContain("trial_period_days");
   });
 });
 
@@ -298,6 +336,28 @@ describe("handleCheckoutSession", () => {
     const res = await handleCheckoutSession("cs_1", { STRIPE_SECRET_KEY: "sk_test_x", DB: db });
     const body = (await res.json()) as { bearerToken: string };
     expect(body.bearerToken).toBe("tok123");
+  });
+
+  it("marks a one-time payment session (lifetime plan) with subscription_status 'lifetime'", async () => {
+    vi.stubGlobal(
+      "fetch",
+      mockFetchJson(200, {
+        id: "cs_2",
+        mode: "payment",
+        customer: "cus_2",
+        payment_status: "paid",
+        customer_details: { email: "a@b.com" },
+      }),
+    );
+    const { db, calls } = fakeDbCapturing({
+      id: "u2",
+      email: "a@b.com",
+      stripe_customer_id: "cus_2",
+      subscription_status: "lifetime",
+      bearer_token: "tok456",
+    });
+    await handleCheckoutSession("cs_2", { STRIPE_SECRET_KEY: "sk_test_x", DB: db });
+    expect(calls[0][3]).toBe("lifetime"); // upsertUserFromStripe binds subscriptionStatus 4th
   });
 });
 

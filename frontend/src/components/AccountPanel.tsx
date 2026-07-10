@@ -1,21 +1,36 @@
 import { useEffect, useState } from "preact/hooks";
 import { BEARER_TOKEN_CHANGED_EVENT, getAccountStatus, startCheckout, startPortalSession } from "../lib/api";
-import type { AccountStatus } from "../lib/api";
+import type { AccountStatus, Plan } from "../lib/api";
 
-type LoadState = { status: "loading" } | { status: "signedOut" } | { status: "active"; account: AccountStatus } | { status: "error" };
+type LoadState =
+  | { status: "loading" }
+  | { status: "signedOut" }
+  | { status: "active"; account: AccountStatus }
+  | { status: "lifetime"; account: AccountStatus }
+  | { status: "error" };
 
 interface AccountPanelProps {
   t: {
     account: {
       title: string;
       subscribeBody: string;
-      subscribeButton: string;
+      planMonthly: string;
+      planYearly: string;
+      planLifetime: string;
+      trialNote: string;
       activeBody: string;
+      lifetimeBody: string;
       manageButton: string;
       error: string;
     };
   };
 }
+
+const PLAN_LABEL_KEYS = {
+  monthly: "planMonthly",
+  yearly: "planYearly",
+  lifetime: "planLifetime",
+} as const satisfies Record<Plan, keyof AccountPanelProps["t"]["account"]>;
 
 export function AccountPanel({ t }: AccountPanelProps) {
   const [state, setState] = useState<LoadState>({ status: "loading" });
@@ -29,7 +44,13 @@ export function AccountPanel({ t }: AccountPanelProps) {
       getAccountStatus()
         .then((account) => {
           if (cancelled) return;
-          setState(account && account.subscriptionStatus === "active" ? { status: "active", account } : { status: "signedOut" });
+          if (!account) {
+            setState({ status: "signedOut" });
+          } else if (account.subscriptionStatus === "lifetime") {
+            setState({ status: "lifetime", account });
+          } else {
+            setState({ status: "active", account });
+          }
         })
         .catch(() => {
           if (!cancelled) setState({ status: "error" });
@@ -48,10 +69,10 @@ export function AccountPanel({ t }: AccountPanelProps) {
     };
   }, []);
 
-  async function onSubscribe() {
+  async function onSubscribe(plan: Plan) {
     setBusy(true);
     try {
-      window.location.href = await startCheckout();
+      window.location.href = await startCheckout(plan);
     } catch {
       setState({ status: "error" });
       setBusy(false);
@@ -76,9 +97,14 @@ export function AccountPanel({ t }: AccountPanelProps) {
       {state.status === "signedOut" && (
         <>
           <p>{t.account.subscribeBody}</p>
-          <button type="button" class="account-button" onClick={onSubscribe} disabled={busy}>
-            {t.account.subscribeButton}
-          </button>
+          <div class="account-plans">
+            {(Object.keys(PLAN_LABEL_KEYS) as Plan[]).map((plan) => (
+              <button key={plan} type="button" class="account-button" onClick={() => onSubscribe(plan)} disabled={busy}>
+                {t.account[PLAN_LABEL_KEYS[plan]]}
+              </button>
+            ))}
+          </div>
+          <p class="account-trial-note">{t.account.trialNote}</p>
         </>
       )}
       {state.status === "active" && (
@@ -89,6 +115,7 @@ export function AccountPanel({ t }: AccountPanelProps) {
           </button>
         </>
       )}
+      {state.status === "lifetime" && <p>{t.account.lifetimeBody}</p>}
     </>
   );
 }
