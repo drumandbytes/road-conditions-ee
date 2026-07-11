@@ -6,6 +6,11 @@
     "hazards": "Liiklusohud"
   },
   "attribution": "Andmed: Transpordiamet (Tark Tee). Kaart: OpenStreetMap panustajad.",
+  "theme": {
+    "switchToLight": "Lülitu heledale teemale",
+    "switchToDark": "Lülitu tumedale teemale",
+    "switchToAuto": "Lülitu automaatsele teemale"
+  },
   "info": {
     "openButton": "Menüü",
     "close": "Sulge",

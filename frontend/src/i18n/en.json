@@ -6,6 +6,11 @@
     "hazards": "Hazards"
   },
   "attribution": "Data: Transpordiamet (Tark Tee). Map: OpenStreetMap contributors.",
+  "theme": {
+    "switchToLight": "Switch to light theme",
+    "switchToDark": "Switch to dark theme",
+    "switchToAuto": "Switch to auto theme"
+  },
   "info": {
     "openButton": "Menu",
     "close": "Close",

@@ -105,10 +105,11 @@ function addClusteredSource(
 }
 
 interface MapProps {
+  flavor: "light" | "dark";
   onCameraClick: (id: string, name: string) => void;
 }
 
-export function Map({ onCameraClick }: MapProps) {
+export function Map({ flavor, onCameraClick }: MapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   // Gates the loading overlay — without this, a slow or interrupted tile fetch (confirmed:
   // reloading mid-fetch reliably reproduces it) leaves a half-drawn map on screen with no
@@ -121,6 +122,13 @@ export function Map({ onCameraClick }: MapProps) {
     const container = containerRef.current;
     let map: maplibregl.Map | undefined;
     let cancelled = false;
+    // Theme changes rebuild the map from scratch (this effect re-runs, tearing down the old
+    // instance in its cleanup below) rather than trying to hot-swap the style in place —
+    // simpler and more reliable than patching MapLibre's diffed style update for a source
+    // whose layers, paint, and glyph/sprite URLs all change together. Reset both gates so the
+    // loading overlay reappears for the brief rebuild instead of showing stale map state.
+    setTilesReady(false);
+    setDataReady(false);
 
     // Don't construct the Map until the container has a real, non-zero size. MapLibre reads
     // the container's size synchronously at construction time, and on a fresh page load that
@@ -145,7 +153,7 @@ export function Map({ onCameraClick }: MapProps) {
         style: {
           version: 8,
           glyphs: "https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf",
-          sprite: "https://protomaps.github.io/basemaps-assets/sprites/v4/light",
+          sprite: `https://protomaps.github.io/basemaps-assets/sprites/v4/${flavor}`,
           sources: {
             estonia: { type: "vector", url: `pmtiles://${ESTONIA_TILES_URL}`, attribution: "© OpenStreetMap contributors" },
           },
@@ -157,7 +165,7 @@ export function Map({ onCameraClick }: MapProps) {
           // estonia.pmtiles' own bbox, at any zoom level, so there's nothing left for a
           // backdrop to fill. Single source, no minzoom floor needed either — see
           // MAX_PAN_BOUNDS' comment for the full history of why this used to need two sources.
-          layers: layers("estonia", namedFlavor("light"), { lang: "et" }),
+          layers: layers("estonia", namedFlavor(flavor), { lang: "et" }),
         },
         maxBounds: MAX_PAN_BOUNDS,
       });
@@ -199,7 +207,7 @@ export function Map({ onCameraClick }: MapProps) {
       resizeObserver.disconnect();
       map?.remove();
     };
-  }, []);
+  }, [flavor]);
 
   return (
     <div class="map-container">

@@ -2,27 +2,57 @@ import { useEffect, useState } from "preact/hooks";
 import { Map } from "./components/Map";
 import { InfoPanel } from "./components/InfoPanel";
 import { CameraModal } from "./components/CameraModal";
+import { ThemeToggle } from "./components/ThemeToggle";
 import type { Locale } from "./components/InfoPanel";
+import type { Theme } from "./components/ThemeToggle";
 import { completeCheckoutSession, setBearerToken } from "./lib/api";
 import et from "./i18n/et.json";
 import en from "./i18n/en.json";
 
 const TRANSLATIONS: Record<Locale, typeof et> = { et, en };
 const LOCALE_STORAGE_KEY = "road-conditions-locale";
+const THEME_STORAGE_KEY = "road-conditions-theme";
 
 function getInitialLocale(): Locale {
   const stored = localStorage.getItem(LOCALE_STORAGE_KEY);
   return stored === "en" ? "en" : "et";
 }
 
+function getInitialTheme(): Theme {
+  const stored = localStorage.getItem(THEME_STORAGE_KEY);
+  return stored === "light" || stored === "dark" || stored === "auto" ? stored : "auto";
+}
+
 export function App() {
   const [locale, setLocale] = useState<Locale>(getInitialLocale);
   const [selectedCamera, setSelectedCamera] = useState<{ id: string; name: string } | null>(null);
+  const [theme, setTheme] = useState<Theme>(getInitialTheme);
+  const [systemPrefersDark, setSystemPrefersDark] = useState(
+    () => window.matchMedia("(prefers-color-scheme: dark)").matches,
+  );
   const t = TRANSLATIONS[locale];
+  const effectiveTheme: "light" | "dark" = theme === "auto" ? (systemPrefersDark ? "dark" : "light") : theme;
 
   useEffect(() => {
     localStorage.setItem(LOCALE_STORAGE_KEY, locale);
   }, [locale]);
+
+  useEffect(() => {
+    localStorage.setItem(THEME_STORAGE_KEY, theme);
+  }, [theme]);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = effectiveTheme;
+  }, [effectiveTheme]);
+
+  // Only matters while theme is "auto" — tracks live OS-level changes (e.g. the system
+  // switching at sunset) so the app follows along without a reload.
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const onChange = (e: MediaQueryListEvent) => setSystemPrefersDark(e.matches);
+    media.addEventListener("change", onChange);
+    return () => media.removeEventListener("change", onChange);
+  }, []);
 
   // Runs once on mount, not tied to locale — this is Stripe redirecting back after checkout,
   // not a locale-dependent concern. Clears the query params afterward either way (success or
@@ -51,8 +81,9 @@ export function App() {
       <header class="app-header">
         <img src="/favicon.svg" alt="" class="app-logo" />
         <h1>{t.appName}</h1>
+        <ThemeToggle theme={theme} onChange={setTheme} labels={t.theme} />
       </header>
-      <Map onCameraClick={(id, name) => setSelectedCamera({ id, name })} />
+      <Map flavor={effectiveTheme} onCameraClick={(id, name) => setSelectedCamera({ id, name })} />
       <InfoPanel t={t} locale={locale} onLocaleChange={setLocale} />
       {selectedCamera && (
         <CameraModal
