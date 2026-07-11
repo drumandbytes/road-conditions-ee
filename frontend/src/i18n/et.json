@@ -11,6 +11,21 @@
     "switchToDark": "Lülitu tumedale teemale",
     "switchToAuto": "Lülitu automaatsele teemale"
   },
+  "popups": {
+    "statusGreen": "Toimib korralikult",
+    "statusAmber": "Andmekvaliteet langenud",
+    "statusRed": "Ei edasta andmeid",
+    "lastUpdated": "Viimati uuendatud",
+    "until": "Kuni",
+    "ongoing": "Käimasolev",
+    "hazardSlippery": "Libe tee",
+    "hazardObstacle": "Takistus teel",
+    "hazardAccident": "Õnnetus",
+    "hazardRoadworks": "Teetööd",
+    "hazardReducedVisibility": "Halb nähtavus",
+    "hazardBlockage": "Tee sulgemine",
+    "hazardWeather": "Erakorralised ilmastikuolud"
+  },
   "info": {
     "openButton": "Menüü",
     "close": "Sulge",

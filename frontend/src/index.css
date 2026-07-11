@@ -303,6 +303,69 @@ body,
   padding: 0;
 }
 
+/* MapLibre popup for weather-station/hazard markers — overrides the library's own default
+   white-box styling to match the app's theme (including dark mode) instead of standing out
+   as an unstyled system dialog against the map. */
+.map-popup .maplibregl-popup-content {
+  background: var(--color-bg);
+  color: var(--color-text);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+  padding: 0.75rem 1.6rem 0.75rem 0.9rem;
+  font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+}
+
+/* MapLibre draws the little arrow via CSS borders, one side colored per anchor position —
+   override all four so it matches the popup body regardless of which side it points from. */
+.map-popup .maplibregl-popup-tip {
+  border-top-color: var(--color-bg) !important;
+  border-bottom-color: var(--color-bg) !important;
+  border-left-color: var(--color-bg) !important;
+  border-right-color: var(--color-bg) !important;
+}
+
+.map-popup .maplibregl-popup-close-button {
+  color: var(--color-text-secondary);
+  font-size: 1.1rem;
+}
+
+.map-popup-title {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.map-popup-status {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+  margin-top: 0.3rem;
+}
+
+.map-popup-status-dot {
+  display: inline-block;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.map-popup-desc {
+  font-size: 0.85rem;
+  line-height: 1.4;
+  margin-top: 0.4rem;
+}
+
+.map-popup-meta {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+  margin-top: 0.4rem;
+}
+
 .legend-list {
   list-style: none;
   display: flex;
@@ -433,6 +496,34 @@ body,
   line-height: 1;
   cursor: pointer;
   color: var(--color-text-secondary);
+}
+
+.camera-modal-status {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 2rem 1rem;
+  min-width: 200px;
+}
+
+.camera-modal-spinner {
+  width: 2rem;
+  height: 2rem;
+  border: 3px solid var(--color-spinner-track);
+  border-top-color: var(--color-accent);
+  border-radius: 50%;
+  animation: map-spin 0.8s linear infinite;
+}
+
+.camera-modal-status-icon {
+  color: var(--color-text-secondary);
+}
+
+.camera-modal-status-text {
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+  text-align: center;
 }
 
 .account-header {

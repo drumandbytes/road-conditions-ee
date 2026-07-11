@@ -83,7 +83,12 @@ export function App() {
         <h1>{t.appName}</h1>
         <ThemeToggle theme={theme} onChange={setTheme} labels={t.theme} />
       </header>
-      <Map flavor={effectiveTheme} onCameraClick={(id, name) => setSelectedCamera({ id, name })} />
+      <Map
+        flavor={effectiveTheme}
+        locale={locale}
+        popupsT={t.popups}
+        onCameraClick={(id, name) => setSelectedCamera({ id, name })}
+      />
       <InfoPanel t={t} locale={locale} onLocaleChange={setLocale} />
       {selectedCamera && (
         <CameraModal

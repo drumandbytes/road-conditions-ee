@@ -5,6 +5,7 @@ import { Protocol } from "pmtiles";
 import { layers, namedFlavor } from "@protomaps/basemaps";
 import { ESTONIA_BOUNDS, MAX_PAN_BOUNDS, ESTONIA_TILES_URL } from "../lib/config";
 import { getCameras, getHazards, getWeatherStations } from "../lib/api";
+import type { Locale } from "./InfoPanel";
 
 // Registered once at module scope, not per-mount — addProtocol is a global maplibregl
 // registration, re-adding it on every component mount/unmount would be redundant.
@@ -17,10 +18,99 @@ const CLUSTER_LAYER_PAINT = {
   hazards: "#ff3b30",
 } as const;
 
+interface PopupsT {
+  statusGreen: string;
+  statusAmber: string;
+  statusRed: string;
+  lastUpdated: string;
+  until: string;
+  ongoing: string;
+  hazardSlippery: string;
+  hazardObstacle: string;
+  hazardAccident: string;
+  hazardRoadworks: string;
+  hazardReducedVisibility: string;
+  hazardBlockage: string;
+  hazardWeather: string;
+}
+
+// Escapes text pulled from Tark Tee's data (station names, hazard descriptions) before it
+// goes into Popup.setHTML() — that API takes raw HTML, so without this any HTML/script
+// content in upstream data would execute in the page rather than display as text.
+function escapeHtml(value: string): string {
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+function formatDateTime(iso: string | null, locale: Locale): string | null {
+  if (!iso) return null;
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return null;
+  return new Intl.DateTimeFormat(locale === "et" ? "et-EE" : "en-GB", { dateStyle: "medium", timeStyle: "short" }).format(
+    date,
+  );
+}
+
+const STATUS_LABEL_KEY: Record<string, keyof PopupsT> = {
+  green: "statusGreen",
+  amber: "statusAmber",
+  red: "statusRed",
+};
+
+const STATUS_COLOR: Record<string, string> = {
+  green: "var(--color-success)",
+  amber: "var(--color-gold)",
+  red: "var(--color-danger)",
+};
+
+function buildWeatherPopupHtml(properties: Record<string, unknown>, locale: Locale, t: PopupsT): string {
+  const name = escapeHtml(String(properties.name ?? ""));
+  const status = String(properties.status ?? "");
+  const statusLabelKey = STATUS_LABEL_KEY[status];
+  const statusLabel = escapeHtml(statusLabelKey ? t[statusLabelKey] : status);
+  const statusColor = STATUS_COLOR[status] ?? "var(--color-text-secondary)";
+  const updated = formatDateTime(properties.lastUpdatedAt ? String(properties.lastUpdatedAt) : null, locale);
+
+  return `
+    <div class="map-popup-title">${name}</div>
+    <div class="map-popup-status"><span class="map-popup-status-dot" style="background:${statusColor}"></span>${statusLabel}</div>
+    ${updated ? `<div class="map-popup-meta">${escapeHtml(t.lastUpdated)}: ${escapeHtml(updated)}</div>` : ""}
+  `;
+}
+
+const HAZARD_LABEL_KEY: Record<string, keyof PopupsT> = {
+  slippery: "hazardSlippery",
+  obstacle: "hazardObstacle",
+  accident: "hazardAccident",
+  roadworks: "hazardRoadworks",
+  reduced_visibility: "hazardReducedVisibility",
+  blockage: "hazardBlockage",
+  weather: "hazardWeather",
+};
+
+function buildHazardPopupHtml(properties: Record<string, unknown>, locale: Locale, t: PopupsT): string {
+  const eventType = String(properties.eventType ?? "");
+  const labelKey = HAZARD_LABEL_KEY[eventType];
+  const label = escapeHtml(labelKey ? t[labelKey] : eventType);
+  const description = properties.description ? escapeHtml(String(properties.description)) : null;
+  const startsAt = formatDateTime(properties.startsAt ? String(properties.startsAt) : null, locale);
+  const endsAt = formatDateTime(properties.endsAt ? String(properties.endsAt) : null, locale);
+  const timeLine = startsAt
+    ? `${escapeHtml(startsAt)}${endsAt ? ` – ${escapeHtml(endsAt)}` : ` (${escapeHtml(t.ongoing)})`}`
+    : null;
+
+  return `
+    <div class="map-popup-title"><span class="map-popup-status-dot" style="background:var(--color-danger)"></span>${label}</div>
+    ${description ? `<div class="map-popup-desc">${description}</div>` : ""}
+    ${timeLine ? `<div class="map-popup-meta">${timeLine}</div>` : ""}
+  `;
+}
+
 function addClusteredSource(
   map: maplibregl.Map,
   id: keyof typeof CLUSTER_LAYER_PAINT,
   data: GeoJSON.FeatureCollection,
+  locale: Locale,
+  popupsT: PopupsT,
   onPointClick?: (properties: Record<string, unknown>) => void,
 ) {
   map.addSource(id, { type: "geojson", data, cluster: true, clusterMaxZoom: 14, clusterRadius: 50 });
@@ -75,10 +165,12 @@ function addClusteredSource(
       return;
     }
     const coordinates = feature.geometry.coordinates.slice() as [number, number];
-    const description = Object.entries(feature.properties ?? {})
-      .map(([key, value]) => `<strong>${key}</strong>: ${value}`)
-      .join("<br>");
-    new maplibregl.Popup().setLngLat(coordinates).setHTML(description).addTo(map);
+    const properties = feature.properties ?? {};
+    const html =
+      id === "weatherStations"
+        ? buildWeatherPopupHtml(properties, locale, popupsT)
+        : buildHazardPopupHtml(properties, locale, popupsT);
+    new maplibregl.Popup({ className: "map-popup", maxWidth: "260px" }).setLngLat(coordinates).setHTML(html).addTo(map);
   });
 
   // Clicking a cluster zooms in to the level where it starts splitting into smaller
@@ -106,10 +198,12 @@ function addClusteredSource(
 
 interface MapProps {
   flavor: "light" | "dark";
+  locale: Locale;
+  popupsT: PopupsT;
   onCameraClick: (id: string, name: string) => void;
 }
 
-export function Map({ flavor, onCameraClick }: MapProps) {
+export function Map({ flavor, locale, popupsT, onCameraClick }: MapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   // Gates the loading overlay — without this, a slow or interrupted tile fetch (confirmed:
   // reloading mid-fetch reliably reproduces it) leaves a half-drawn map on screen with no
@@ -122,11 +216,13 @@ export function Map({ flavor, onCameraClick }: MapProps) {
     const container = containerRef.current;
     let map: maplibregl.Map | undefined;
     let cancelled = false;
-    // Theme changes rebuild the map from scratch (this effect re-runs, tearing down the old
-    // instance in its cleanup below) rather than trying to hot-swap the style in place —
-    // simpler and more reliable than patching MapLibre's diffed style update for a source
-    // whose layers, paint, and glyph/sprite URLs all change together. Reset both gates so the
-    // loading overlay reappears for the brief rebuild instead of showing stale map state.
+    // Theme or locale changes rebuild the map from scratch (this effect re-runs, tearing down
+    // the old instance in its cleanup below) rather than trying to hot-swap the style/popups
+    // in place — simpler and more reliable than patching MapLibre's diffed style update for a
+    // source whose layers, paint, and glyph/sprite URLs all change together, and locale needs
+    // a full data re-fetch anyway since popup content is built at click time from whatever
+    // locale was captured when the source was added. Reset both gates so the loading overlay
+    // reappears for the brief rebuild instead of showing stale map state.
     setTilesReady(false);
     setDataReady(false);
 
@@ -191,11 +287,11 @@ export function Map({ flavor, onCameraClick }: MapProps) {
       map.on("load", () => {
         Promise.all([getWeatherStations(), getCameras(), getHazards()])
           .then(([weatherStations, cameras, hazards]) => {
-            addClusteredSource(map!, "weatherStations", weatherStations);
-            addClusteredSource(map!, "cameras", cameras, (properties) => {
+            addClusteredSource(map!, "weatherStations", weatherStations, locale, popupsT);
+            addClusteredSource(map!, "cameras", cameras, locale, popupsT, (properties) => {
               onCameraClick(String(properties.id), String(properties.name));
             });
-            addClusteredSource(map!, "hazards", hazards);
+            addClusteredSource(map!, "hazards", hazards, locale, popupsT);
           })
           .catch((err) => console.error("Failed to load map data layers", err))
           .finally(() => setDataReady(true));
@@ -207,7 +303,7 @@ export function Map({ flavor, onCameraClick }: MapProps) {
       resizeObserver.disconnect();
       map?.remove();
     };
-  }, [flavor]);
+  }, [flavor, locale, popupsT]);
 
   return (
     <div class="map-container">

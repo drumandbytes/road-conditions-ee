@@ -61,9 +61,53 @@ export function CameraModal({ cameraId, cameraName, onClose, t }: CameraModalPro
           ×
         </button>
         <h2>{cameraName}</h2>
-        {state.status === "loading" && <p>{t.cameraModal.loading}</p>}
-        {state.status === "paywalled" && <p>{t.cameraModal.paywalled}</p>}
-        {state.status === "error" && <p>{t.cameraModal.error}</p>}
+
+        {state.status === "loading" && (
+          <div class="camera-modal-status">
+            <div class="camera-modal-spinner" />
+          </div>
+        )}
+
+        {state.status === "paywalled" && (
+          <div class="camera-modal-status">
+            <svg
+              class="camera-modal-status-icon"
+              viewBox="0 0 24 24"
+              width="28"
+              height="28"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <rect x="5" y="11" width="14" height="9" rx="2" />
+              <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+            </svg>
+            <p class="camera-modal-status-text">{t.cameraModal.paywalled}</p>
+          </div>
+        )}
+
+        {state.status === "error" && (
+          <div class="camera-modal-status">
+            <svg
+              class="camera-modal-status-icon"
+              viewBox="0 0 24 24"
+              width="28"
+              height="28"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <circle cx="12" cy="12" r="9" />
+              <path d="M12 8v5M12 16h.01" />
+            </svg>
+            <p class="camera-modal-status-text">{t.cameraModal.error}</p>
+          </div>
+        )}
+
         {state.status === "ready" && <img class="camera-modal-image" src={state.objectUrl} alt={cameraName} />}
       </div>
     </div>

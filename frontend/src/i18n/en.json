@@ -11,6 +11,21 @@
     "switchToDark": "Switch to dark theme",
     "switchToAuto": "Switch to auto theme"
   },
+  "popups": {
+    "statusGreen": "Reporting normally",
+    "statusAmber": "Degraded data quality",
+    "statusRed": "Not reporting",
+    "lastUpdated": "Last updated",
+    "until": "Until",
+    "ongoing": "Ongoing",
+    "hazardSlippery": "Slippery road",
+    "hazardObstacle": "Obstacle on road",
+    "hazardAccident": "Accident",
+    "hazardRoadworks": "Roadworks",
+    "hazardReducedVisibility": "Reduced visibility",
+    "hazardBlockage": "Road blockage",
+    "hazardWeather": "Severe weather"
+  },
   "info": {
     "openButton": "Menu",
     "close": "Close",
