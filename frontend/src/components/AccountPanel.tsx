@@ -15,8 +15,13 @@ interface AccountPanelProps {
       title: string;
       subscribeBody: string;
       planMonthly: string;
+      planMonthlyUnit: string;
       planYearly: string;
+      planYearlyUnit: string;
+      trialTag: string;
       trialNote: string;
+      statusActive: string;
+      statusLifetime: string;
       activeBody: string;
       lifetimeBody: string;
       manageButton: string;
@@ -25,10 +30,12 @@ interface AccountPanelProps {
   };
 }
 
+type AccountKey = keyof AccountPanelProps["t"]["account"];
+
 const PLAN_LABEL_KEYS = {
-  monthly: "planMonthly",
-  yearly: "planYearly",
-} as const satisfies Record<Plan, keyof AccountPanelProps["t"]["account"]>;
+  monthly: { price: "planMonthly", unit: "planMonthlyUnit" },
+  yearly: { price: "planYearly", unit: "planYearlyUnit" },
+} as const satisfies Record<Plan, { price: AccountKey; unit: AccountKey }>;
 
 export function AccountPanel({ t }: AccountPanelProps) {
   const [state, setState] = useState<LoadState>({ status: "loading" });
@@ -89,22 +96,34 @@ export function AccountPanel({ t }: AccountPanelProps) {
 
   return (
     <>
-      <h2>{t.account.title}</h2>
-      {state.status === "loading" && <p>…</p>}
-      {state.status === "error" && <p>{t.account.error}</p>}
+      <div class="account-header">
+        <h2>{t.account.title}</h2>
+        {state.status === "active" && <span class="status-badge status-badge-active">{t.account.statusActive}</span>}
+        {state.status === "lifetime" && <span class="status-badge status-badge-lifetime">{t.account.statusLifetime}</span>}
+      </div>
+
+      {state.status === "loading" && <div class="account-skeleton" aria-hidden="true" />}
+
+      {state.status === "error" && <p class="account-alert account-alert-error">{t.account.error}</p>}
+
       {state.status === "signedOut" && (
         <>
           <p>{t.account.subscribeBody}</p>
-          <div class="account-plans">
+          <div class="plan-cards">
             {(Object.keys(PLAN_LABEL_KEYS) as Plan[]).map((plan) => (
-              <button key={plan} type="button" class="account-button" onClick={() => onSubscribe(plan)} disabled={busy}>
-                {t.account[PLAN_LABEL_KEYS[plan]]}
+              <button key={plan} type="button" class="plan-card" onClick={() => onSubscribe(plan)} disabled={busy}>
+                <span class="plan-card-price">
+                  {t.account[PLAN_LABEL_KEYS[plan].price]}
+                  <span class="plan-card-unit">{t.account[PLAN_LABEL_KEYS[plan].unit]}</span>
+                </span>
+                <span class="plan-card-trial">{t.account.trialTag}</span>
               </button>
             ))}
           </div>
           <p class="account-trial-note">{t.account.trialNote}</p>
         </>
       )}
+
       {state.status === "active" && (
         <>
           <p>{t.account.activeBody}</p>
@@ -113,6 +132,7 @@ export function AccountPanel({ t }: AccountPanelProps) {
           </button>
         </>
       )}
+
       {state.status === "lifetime" && <p>{t.account.lifetimeBody}</p>}
     </>
   );

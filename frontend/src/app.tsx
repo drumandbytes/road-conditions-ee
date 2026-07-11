@@ -49,6 +49,7 @@ export function App() {
   return (
     <div class="app">
       <header class="app-header">
+        <img src="/favicon.svg" alt="" class="app-logo" />
         <h1>{t.appName}</h1>
       </header>
       <Map onCameraClick={(id, name) => setSelectedCamera({ id, name })} />
