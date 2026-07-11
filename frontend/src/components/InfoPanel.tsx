@@ -4,7 +4,7 @@ import { AccountPanel } from "./AccountPanel";
 const COFFEE_LINK = "https://buymeacoffee.com/justmaris";
 
 export type Locale = "et" | "en";
-type Tab = "info" | "about" | "account";
+type Tab = "info" | "account";
 
 interface InfoPanelProps {
   t: {
@@ -13,8 +13,9 @@ interface InfoPanelProps {
       openButton: string;
       close: string;
       tabInfo: string;
-      tabAbout: string;
       tabAccount: string;
+      aboutLink: string;
+      backButton: string;
       aboutTitle: string;
       aboutBody: string;
       aboutBodyExtra: string;
@@ -59,6 +60,7 @@ interface InfoPanelProps {
 export function InfoPanel({ t, locale, onLocaleChange }: InfoPanelProps) {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<Tab>("info");
+  const [showAbout, setShowAbout] = useState(false);
 
   return (
     <>
@@ -85,69 +87,12 @@ export function InfoPanel({ t, locale, onLocaleChange }: InfoPanelProps) {
               ))}
             </div>
 
-            <div class="panel-tabs" role="tablist">
-              {(
-                [
-                  ["info", t.info.tabInfo],
-                  ["about", t.info.tabAbout],
-                  ["account", t.info.tabAccount],
-                ] as const
-              ).map(([key, label]) => (
-                <button
-                  key={key}
-                  type="button"
-                  role="tab"
-                  aria-selected={tab === key}
-                  class={tab === key ? "panel-tab panel-tab-active" : "panel-tab"}
-                  onClick={() => setTab(key)}
-                >
-                  {label}
+            {showAbout ? (
+              <>
+                <button type="button" class="back-link" onClick={() => setShowAbout(false)}>
+                  ← {t.info.backButton}
                 </button>
-              ))}
-            </div>
 
-            {tab === "info" && (
-              <>
-                <h2>{t.info.legendTitle}</h2>
-                <ul class="legend-list">
-                  <li class="legend-row">
-                    <span class="legend-icon" style={{ background: "#2e9bff" }} />
-                    <span class="legend-text">
-                      <span class="legend-item-title">{t.info.legendWeatherStationsTitle}</span>
-                      <span class="legend-desc">{t.info.legendWeatherStationsDesc}</span>
-                    </span>
-                  </li>
-                  <li class="legend-row">
-                    <span class="legend-icon" style={{ background: "#8e44ad" }} />
-                    <span class="legend-text">
-                      <span class="legend-item-title">{t.info.legendCamerasTitle}</span>
-                      <span class="legend-desc">{t.info.legendCamerasDesc}</span>
-                    </span>
-                  </li>
-                  <li class="legend-row">
-                    <span class="legend-icon" style={{ background: "#ff3b30" }} />
-                    <span class="legend-text">
-                      <span class="legend-item-title">{t.info.legendHazardsTitle}</span>
-                      <span class="legend-desc">{t.info.legendHazardsDesc}</span>
-                    </span>
-                  </li>
-                </ul>
-                <p class="legend-note">{t.info.legendClusters}</p>
-
-                <h2>{t.info.howToTitle}</h2>
-                <ol class="steps-list">
-                  <li>{t.info.howTo1}</li>
-                  <li>{t.info.howTo2}</li>
-                  <li>{t.info.howTo3}</li>
-                </ol>
-
-                <h2>{t.info.dataTitle}</h2>
-                <p class="data-attribution">{t.attribution}</p>
-              </>
-            )}
-
-            {tab === "about" && (
-              <>
                 <h2>{t.info.aboutTitle}</h2>
                 <p>{t.info.aboutBody}</p>
                 <p>{t.info.aboutBodyExtra}</p>
@@ -162,9 +107,75 @@ export function InfoPanel({ t, locale, onLocaleChange }: InfoPanelProps) {
                   />
                 </a>
               </>
-            )}
+            ) : (
+              <>
+                <div class="panel-tabs" role="tablist">
+                  {(
+                    [
+                      ["info", t.info.tabInfo],
+                      ["account", t.info.tabAccount],
+                    ] as const
+                  ).map(([key, label]) => (
+                    <button
+                      key={key}
+                      type="button"
+                      role="tab"
+                      aria-selected={tab === key}
+                      class={tab === key ? "panel-tab panel-tab-active" : "panel-tab"}
+                      onClick={() => setTab(key)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
 
-            {tab === "account" && <AccountPanel t={t} />}
+                {tab === "info" && (
+                  <>
+                    <h2>{t.info.legendTitle}</h2>
+                    <ul class="legend-list">
+                      <li class="legend-row">
+                        <span class="legend-icon" style={{ background: "#2e9bff" }} />
+                        <span class="legend-text">
+                          <span class="legend-item-title">{t.info.legendWeatherStationsTitle}</span>
+                          <span class="legend-desc">{t.info.legendWeatherStationsDesc}</span>
+                        </span>
+                      </li>
+                      <li class="legend-row">
+                        <span class="legend-icon" style={{ background: "#8e44ad" }} />
+                        <span class="legend-text">
+                          <span class="legend-item-title">{t.info.legendCamerasTitle}</span>
+                          <span class="legend-desc">{t.info.legendCamerasDesc}</span>
+                        </span>
+                      </li>
+                      <li class="legend-row">
+                        <span class="legend-icon" style={{ background: "#ff3b30" }} />
+                        <span class="legend-text">
+                          <span class="legend-item-title">{t.info.legendHazardsTitle}</span>
+                          <span class="legend-desc">{t.info.legendHazardsDesc}</span>
+                        </span>
+                      </li>
+                    </ul>
+                    <p class="legend-note">{t.info.legendClusters}</p>
+
+                    <h2>{t.info.howToTitle}</h2>
+                    <ol class="steps-list">
+                      <li>{t.info.howTo1}</li>
+                      <li>{t.info.howTo2}</li>
+                      <li>{t.info.howTo3}</li>
+                    </ol>
+
+                    <h2>{t.info.dataTitle}</h2>
+                    <p class="data-attribution">{t.attribution}</p>
+                  </>
+                )}
+
+                {tab === "account" && <AccountPanel t={t} />}
+
+                <button type="button" class="about-link" onClick={() => setShowAbout(true)}>
+                  {t.info.aboutLink}
+                </button>
+              </>
+            )}
           </div>
         </div>
       )}
