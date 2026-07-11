@@ -139,14 +139,13 @@ function buildHazardPopupHtml(properties: Record<string, unknown>, locale: Local
   `;
 }
 
-function addClusteredSource(
-  map: maplibregl.Map,
-  id: keyof typeof CLUSTER_LAYER_PAINT,
-  data: GeoJSON.FeatureCollection,
-  locale: Locale,
-  popupsT: PopupsT,
-  onPointClick?: (properties: Record<string, unknown>) => void,
-) {
+interface MarkerLabelsT {
+  weatherStations: string;
+  cameras: string;
+  hazards: string;
+}
+
+function addClusteredSource(map: maplibregl.Map, id: keyof typeof CLUSTER_LAYER_PAINT, data: GeoJSON.FeatureCollection) {
   map.addSource(id, { type: "geojson", data, cluster: true, clusterMaxZoom: 14, clusterRadius: 50 });
 
   map.addLayer({
@@ -201,21 +200,11 @@ function addClusteredSource(
     layout: { "icon-image": id, "icon-size": 0.58, "icon-allow-overlap": true, "icon-ignore-placement": true },
   });
 
-  map.on("click", `${id}-point`, (e) => {
-    const feature = e.features?.[0];
-    if (!feature || feature.geometry.type !== "Point") return;
-    if (onPointClick) {
-      onPointClick(feature.properties ?? {});
-      return;
-    }
-    const coordinates = feature.geometry.coordinates.slice() as [number, number];
-    const properties = feature.properties ?? {};
-    const html =
-      id === "weatherStations"
-        ? buildWeatherPopupHtml(properties, locale, popupsT)
-        : buildHazardPopupHtml(properties, locale, popupsT);
-    new maplibregl.Popup({ className: "map-popup", maxWidth: "260px" }).setLngLat(coordinates).setHTML(html).addTo(map);
-  });
+  // Individual-point clicks are handled by one consolidated listener registered after all
+  // three sources exist (see setupPointClickHandling below) — a marker's own layer-scoped
+  // click here would independently fire alongside another overlapping marker's, which is
+  // exactly the "clicking does the wrong thing" problem at co-located sites (a camera and
+  // weather station at the same road-side monitoring point, for instance).
 
   // Clicking a cluster zooms in to the level where it starts splitting into smaller
   // clusters/individual points, centered on the cluster — standard MapLibre pattern using
@@ -240,14 +229,102 @@ function addClusteredSource(
   }
 }
 
+const POINT_LAYER_IDS = (Object.keys(CLUSTER_LAYER_PAINT) as (keyof typeof CLUSTER_LAYER_PAINT)[]).map(
+  (key) => `${key}-point`,
+);
+
+function openMarkerFeature(
+  map: maplibregl.Map,
+  feature: maplibregl.MapGeoJSONFeature,
+  locale: Locale,
+  popupsT: PopupsT,
+  onCameraClick: (id: string, name: string) => void,
+) {
+  const properties = feature.properties ?? {};
+  if (feature.source === "cameras") {
+    onCameraClick(String(properties.id), String(properties.name));
+    return;
+  }
+  const coordinates = (feature.geometry as GeoJSON.Point).coordinates.slice() as [number, number];
+  const html =
+    feature.source === "weatherStations"
+      ? buildWeatherPopupHtml(properties, locale, popupsT)
+      : buildHazardPopupHtml(properties, locale, popupsT);
+  new maplibregl.Popup({ className: "map-popup", maxWidth: "260px" }).setLngLat(coordinates).setHTML(html).addTo(map);
+}
+
+// Builds the small picker shown when a click hits more than one marker at once (e.g. a
+// camera and a weather station at the same road-side monitoring site) — real DOM nodes with
+// real click listeners via Popup.setDOMContent(), not an HTML string, since each row needs
+// its own interactive handler and building that safely out of escaped strings/inline
+// attributes would be more fragile than just constructing the elements directly.
+function buildChooserContent(
+  features: maplibregl.MapGeoJSONFeature[],
+  markerLabelsT: MarkerLabelsT,
+  onChoose: (feature: maplibregl.MapGeoJSONFeature) => void,
+): HTMLElement {
+  const container = document.createElement("div");
+  container.className = "map-popup-chooser";
+  for (const feature of features) {
+    const sourceId = feature.source as keyof typeof CLUSTER_LAYER_PAINT;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "map-popup-chooser-item";
+
+    const dot = document.createElement("span");
+    dot.className = "map-popup-status-dot";
+    dot.style.background = CLUSTER_LAYER_PAINT[sourceId];
+    button.appendChild(dot);
+    button.appendChild(document.createTextNode(markerLabelsT[sourceId]));
+
+    button.addEventListener("click", () => onChoose(feature));
+    container.appendChild(button);
+  }
+  return container;
+}
+
+// Single map-wide click handler for all marker types, registered once after every source
+// exists — replaces what used to be one click listener per source's own "-point" layer.
+// Those fired independently of each other, so a click landing where two marker types
+// overlap would trigger both at once (e.g. open a popup *and* the camera modal
+// simultaneously). Querying every point layer at the click location up front means exactly
+// one outcome per click: the single marker if there's only one, or a chooser if there's
+// more than one, never both.
+function setupPointClickHandling(
+  map: maplibregl.Map,
+  locale: Locale,
+  popupsT: PopupsT,
+  markerLabelsT: MarkerLabelsT,
+  onCameraClick: (id: string, name: string) => void,
+) {
+  map.on("click", (e) => {
+    const features = map.queryRenderedFeatures(e.point, { layers: POINT_LAYER_IDS });
+    if (features.length === 0) return;
+
+    if (features.length === 1) {
+      openMarkerFeature(map, features[0], locale, popupsT, onCameraClick);
+      return;
+    }
+
+    const coordinates = (features[0].geometry as GeoJSON.Point).coordinates.slice() as [number, number];
+    const popup = new maplibregl.Popup({ className: "map-popup" }).setLngLat(coordinates);
+    const content = buildChooserContent(features, markerLabelsT, (chosen) => {
+      popup.remove();
+      openMarkerFeature(map, chosen, locale, popupsT, onCameraClick);
+    });
+    popup.setDOMContent(content).addTo(map);
+  });
+}
+
 interface MapProps {
   flavor: "light" | "dark";
   locale: Locale;
   popupsT: PopupsT;
+  markerLabelsT: MarkerLabelsT;
   onCameraClick: (id: string, name: string) => void;
 }
 
-export function Map({ flavor, locale, popupsT, onCameraClick }: MapProps) {
+export function Map({ flavor, locale, popupsT, markerLabelsT, onCameraClick }: MapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   // Gates the loading overlay — without this, a slow or interrupted tile fetch (confirmed:
   // reloading mid-fetch reliably reproduces it) leaves a half-drawn map on screen with no
@@ -336,11 +413,10 @@ export function Map({ flavor, locale, popupsT, onCameraClick }: MapProps) {
         )
           .then(() => Promise.all([getWeatherStations(), getCameras(), getHazards()]))
           .then(([weatherStations, cameras, hazards]) => {
-            addClusteredSource(map!, "weatherStations", weatherStations, locale, popupsT);
-            addClusteredSource(map!, "cameras", cameras, locale, popupsT, (properties) => {
-              onCameraClick(String(properties.id), String(properties.name));
-            });
-            addClusteredSource(map!, "hazards", hazards, locale, popupsT);
+            addClusteredSource(map!, "weatherStations", weatherStations);
+            addClusteredSource(map!, "cameras", cameras);
+            addClusteredSource(map!, "hazards", hazards);
+            setupPointClickHandling(map!, locale, popupsT, markerLabelsT, onCameraClick);
           })
           .catch((err) => console.error("Failed to load map data layers", err))
           .finally(() => setDataReady(true));
@@ -352,7 +428,10 @@ export function Map({ flavor, locale, popupsT, onCameraClick }: MapProps) {
       resizeObserver.disconnect();
       map?.remove();
     };
-  }, [flavor, locale, popupsT]);
+  // Deliberately excludes onCameraClick — it's a fresh inline closure from app.tsx on every
+  // render there, and its own behavior (setSelectedCamera) never actually changes, so
+  // depending on it would rebuild the whole map on every unrelated app.tsx re-render.
+  }, [flavor, locale, popupsT, markerLabelsT]);
 
   return (
     <div class="map-container">

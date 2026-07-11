@@ -1,4 +1,4 @@
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useMemo, useState } from "preact/hooks";
 import { Map } from "./components/Map";
 import { InfoPanel } from "./components/InfoPanel";
 import { CameraModal } from "./components/CameraModal";
@@ -32,6 +32,17 @@ export function App() {
   );
   const t = TRANSLATIONS[locale];
   const effectiveTheme: "light" | "dark" = theme === "auto" ? (systemPrefersDark ? "dark" : "light") : theme;
+  // Memoized so the object reference only changes when locale actually does — Map depends on
+  // it to know when to rebuild, and a fresh object literal every app.tsx render would trigger
+  // that rebuild constantly for no reason.
+  const markerLabelsT = useMemo(
+    () => ({
+      weatherStations: t.info.legendWeatherStationsTitle,
+      cameras: t.info.legendCamerasTitle,
+      hazards: t.info.legendHazardsTitle,
+    }),
+    [locale],
+  );
 
   useEffect(() => {
     localStorage.setItem(LOCALE_STORAGE_KEY, locale);
@@ -87,6 +98,7 @@ export function App() {
         flavor={effectiveTheme}
         locale={locale}
         popupsT={t.popups}
+        markerLabelsT={markerLabelsT}
         onCameraClick={(id, name) => setSelectedCamera({ id, name })}
       />
       <InfoPanel t={t} locale={locale} onLocaleChange={setLocale} />
