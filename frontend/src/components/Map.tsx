@@ -3,7 +3,7 @@ import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { Protocol } from "pmtiles";
 import { layers, namedFlavor } from "@protomaps/basemaps";
-import { ESTONIA_BOUNDS, ESTONIA_TILES_URL, WORLD_TILES_URL } from "../lib/config";
+import { ESTONIA_BOUNDS, MAX_PAN_BOUNDS, ESTONIA_TILES_URL } from "../lib/config";
 import { getCameras, getHazards, getWeatherStations } from "../lib/api";
 
 // Registered once at module scope, not per-mount — addProtocol is a global maplibregl
@@ -12,7 +12,7 @@ const protocol = new Protocol();
 maplibregl.addProtocol("pmtiles", protocol.tile);
 
 const CLUSTER_LAYER_PAINT = {
-  weatherStations: "#0071e3",
+  weatherStations: "#2e9bff",
   cameras: "#8e44ad",
   hazards: "#ff3b30",
 } as const;
@@ -147,34 +147,19 @@ export function Map({ onCameraClick }: MapProps) {
           glyphs: "https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf",
           sprite: "https://protomaps.github.io/basemaps-assets/sprites/v4/light",
           sources: {
-            world: { type: "vector", url: `pmtiles://${WORLD_TILES_URL}`, attribution: "© OpenStreetMap contributors" },
             estonia: { type: "vector", url: `pmtiles://${ESTONIA_TILES_URL}`, attribution: "© OpenStreetMap contributors" },
           },
-          // world's layers first (bottom/backdrop), estonia's on top (full detail within its
-          // bounds) — see Phase 0 notes on why the backdrop layer exists at all.
-          //
-          // layers() generates fixed layer IDs (e.g. "roads_shields", "pois") regardless of
-          // the source name passed in — only the `source` field is parameterized, not `id`.
-          // Calling it twice for two sources produces duplicate IDs, which MapLibre rejects
-          // outright (confirmed: broke the deployed map with "duplicate layer id" errors for
-          // every layer). Fix: suffix one set's IDs to disambiguate.
-          //
-          // estonia's layers get a minzoom floor: confirmed directly (by temporarily removing
-          // the estonia source/layers entirely) that the gray-band rendering bug only occurs
-          // when estonia's layers are active *and* the viewport extends beyond its own bounding
-          // box — matches a known MapLibre bug (github.com/maplibre/maplibre-gl-js/issues/5692,
-          // "incorrect handling of missing tiles with uneven [source] coverage"). Below zoom 6
-          // (the initial Estonia fit sits at ~6.04), the viewport routinely extends past
-          // Estonia's bbox anyway — that's the whole point of the world backdrop layer — so
-          // this floor is also just better UX/perf, not only a workaround.
-          layers: [
-            ...layers("world", namedFlavor("light"), { lang: "et" }).map((l) => ({ ...l, id: `${l.id}-world` })),
-            ...layers("estonia", namedFlavor("light"), { lang: "et" }).map((l) => ({
-              ...l,
-              minzoom: Math.max(l.minzoom ?? 0, 6),
-            })),
-          ],
+          // No separate world backdrop source anymore — it existed only to fill the area
+          // outside estonia.pmtiles' bbox (both at low zoom when zoomed out, and near the
+          // bbox edge when panning), which was needed because the viewport could reach areas
+          // with no estonia coverage at all. `maxBounds` (see config.ts) now makes that
+          // structurally impossible: the viewport can never show anything outside
+          // estonia.pmtiles' own bbox, at any zoom level, so there's nothing left for a
+          // backdrop to fill. Single source, no minzoom floor needed either — see
+          // MAX_PAN_BOUNDS' comment for the full history of why this used to need two sources.
+          layers: layers("estonia", namedFlavor("light"), { lang: "et" }),
         },
+        maxBounds: MAX_PAN_BOUNDS,
       });
 
       // Explicit fitBounds() call (not the constructor's `bounds` option) — kept as the
