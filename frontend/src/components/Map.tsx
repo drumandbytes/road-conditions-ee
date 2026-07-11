@@ -18,6 +18,40 @@ const CLUSTER_LAYER_PAINT = {
   hazards: "#ff3b30",
 } as const;
 
+// One small white glyph per marker type, layered on top of its colored circle — plain
+// same-size dots in three colors read as arbitrary at a glance, especially for anyone who
+// hasn't memorized the legend. Camera and hazard icons cut their inner detail (lens, "!")
+// out via fill-rule="evenodd" rather than drawing it in a second color, so it shows the
+// colored circle through the hole instead of needing a second icon image per theme.
+const ICON_SVG: Record<keyof typeof CLUSTER_LAYER_PAINT, string> = {
+  weatherStations:
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">' +
+    '<path fill="#fff" d="M7 17a4.5 4.5 0 0 1-.4-8.98 5.5 5.5 0 0 1 10.6.98A3.5 3.5 0 0 1 17 17H7Z"/></svg>',
+  cameras:
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">' +
+    '<path fill="#fff" fill-rule="evenodd" clip-rule="evenodd" d="M4 8a2 2 0 0 1 2-2h1.2l.9-1.4a1 1 0 0 1 .85-.6h5.1a1 1 0 0 1 .85.6l.9 1.4H18a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8Zm8 2.2a2.8 2.8 0 1 0 0 5.6 2.8 2.8 0 0 0 0-5.6Z"/></svg>',
+  hazards:
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">' +
+    '<path fill="#fff" fill-rule="evenodd" clip-rule="evenodd" d="M12 3.2 22 20H2L12 3.2Zm-1.1 6.3v5.2h2.2V9.5h-2.2Zm0 6.8v2h2.2v-2h-2.2Z"/></svg>',
+};
+
+// MapLibre's addImage() needs an actual decoded image, not raw SVG markup — load each icon
+// once via a data-URI Image element and register it under a matching id, so layers can
+// reference it by icon-image. Resolves to a no-op if already registered (relevant when the
+// map rebuilds on theme/locale change, since this runs again each time).
+function loadMapImage(map: maplibregl.Map, id: string, svg: string): Promise<void> {
+  if (map.hasImage(id)) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      if (!map.hasImage(id)) map.addImage(id, img);
+      resolve();
+    };
+    img.onerror = () => reject(new Error(`Failed to load icon image: ${id}`));
+    img.src = `data:image/svg+xml;base64,${btoa(svg)}`;
+  });
+}
+
 interface PopupsT {
   statusGreen: string;
   statusAmber: string;
@@ -151,10 +185,20 @@ function addClusteredSource(
     filter: ["!", ["has", "point_count"]],
     paint: {
       "circle-color": CLUSTER_LAYER_PAINT[id],
-      "circle-radius": 6,
+      // Bumped from the original 6px — a legible icon on top needs a bit more room than a
+      // plain color dot did.
+      "circle-radius": 9,
       "circle-stroke-width": 1.5,
       "circle-stroke-color": "#ffffff",
     },
+  });
+
+  map.addLayer({
+    id: `${id}-icon`,
+    type: "symbol",
+    source: id,
+    filter: ["!", ["has", "point_count"]],
+    layout: { "icon-image": id, "icon-size": 0.58, "icon-allow-overlap": true, "icon-ignore-placement": true },
   });
 
   map.on("click", `${id}-point`, (e) => {
@@ -285,7 +329,12 @@ export function Map({ flavor, locale, popupsT, onCameraClick }: MapProps) {
       map.addControl(new maplibregl.GeolocateControl({ positionOptions: { enableHighAccuracy: true } }), "top-right");
 
       map.on("load", () => {
-        Promise.all([getWeatherStations(), getCameras(), getHazards()])
+        // Icons must be registered before any symbol layer references them — MapLibre throws
+        // if icon-image points at an unknown id, so this has to resolve before addClusteredSource.
+        Promise.all(
+          (Object.keys(ICON_SVG) as (keyof typeof ICON_SVG)[]).map((key) => loadMapImage(map!, key, ICON_SVG[key])),
+        )
+          .then(() => Promise.all([getWeatherStations(), getCameras(), getHazards()]))
           .then(([weatherStations, cameras, hazards]) => {
             addClusteredSource(map!, "weatherStations", weatherStations, locale, popupsT);
             addClusteredSource(map!, "cameras", cameras, locale, popupsT, (properties) => {
