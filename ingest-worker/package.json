@@ -11,11 +11,13 @@
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260425.1",
     "@types/proj4": "^2.5.6",
+    "@types/web-push": "^3.6.4",
     "typescript": "^5.4.5",
     "vitest": "^4.1.0",
     "wrangler": "^4.107.0"
   },
   "dependencies": {
-    "proj4": "^2.20.9"
+    "proj4": "^2.20.9",
+    "web-push": "^3.6.7"
   }
 }

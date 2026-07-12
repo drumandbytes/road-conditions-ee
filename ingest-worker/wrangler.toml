@@ -1,6 +1,11 @@
 name = "road-conditions-ingest-worker"
 main = "index.ts"
 compatibility_date = "2026-01-01"
+# Required for the `web-push` npm package (Node's `crypto` module) used by src/push.ts —
+# verified directly (local + remote `wrangler dev`) that crypto.createECDH and the full
+# aes128gcm payload-encryption path work correctly at this compatibility_date, despite an
+# open GitHub issue claiming otherwise on older runtime versions.
+compatibility_flags = ["nodejs_compat"]
 
 [observability]
 enabled = true
@@ -20,3 +25,10 @@ database_id = "b4a456a7-c3f3-4a1e-95e5-4a8b7af4deb1"
 
 [ai]
 binding = "AI"
+
+[vars]
+# VAPID public key — not secret (it's meant to be public, baked into frontend JS too as
+# VITE_VAPID_PUBLIC_KEY), so a plain var rather than `wrangler secret put`. The matching
+# private key is a real secret — see VAPID_PRIVATE_KEY, set via `wrangler secret put` (not
+# committed here) — push sending is skipped (see notify.ts) until that's in place.
+VAPID_PUBLIC_KEY = "BClJsVMQ_wz0DarCqQU6GUEJD-Q4xCc009yNlxWIr_qdLtAoYEmwmUpTueXQPjOEWDdvKhOkcHN_bPOogSL1fBI"

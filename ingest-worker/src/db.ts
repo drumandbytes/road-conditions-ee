@@ -134,12 +134,14 @@ interface ExistingRestrictionRow {
   lng: number;
 }
 
-// True when the raw upstream fields differ, OR when extra_info is set but was never
-// successfully translated (a retry candidate) — both cases need this row written; a row whose
-// fields are byte-identical to what's already stored needs nothing at all.
-function restrictionNeedsWrite(existing: ExistingRestrictionRow | undefined, r: Restriction): boolean {
+// True when the raw upstream fields differ from what's stored — this is the "is this
+// restriction actually new/different" check, used both to decide whether a row needs writing
+// and (separately, see upsertRestrictions) whether it's a candidate for push-notification
+// matching. Deliberately excludes the extra_info-retranslation-retry condition below — a
+// restriction whose only "change" is that its translation finally succeeded isn't a new alert
+// and shouldn't re-trigger matching for users who were already notified about it.
+function restrictionCoreFieldsChanged(existing: ExistingRestrictionRow | undefined, r: Restriction): boolean {
   if (!existing) return true;
-  if (r.extraInfo && !existing.extra_info_en) return true;
   return (
     existing.road_nr !== r.roadNr ||
     existing.road_name !== r.roadName ||
@@ -157,6 +159,15 @@ function restrictionNeedsWrite(existing: ExistingRestrictionRow | undefined, r: 
     existing.lat !== r.lat ||
     existing.lng !== r.lng
   );
+}
+
+// True when the row needs writing at all — either its core fields changed, or extra_info is
+// set but was never successfully translated yet (a retry candidate, needs rewriting so
+// extra_info_en can be filled in once translation succeeds).
+function restrictionNeedsWrite(existing: ExistingRestrictionRow | undefined, r: Restriction): boolean {
+  if (!existing) return true;
+  if (r.extraInfo && !existing.extra_info_en) return true;
+  return restrictionCoreFieldsChanged(existing, r);
 }
 
 // Translates extra_info (Estonian-only free text, no upstream English variant — see
@@ -216,11 +227,16 @@ async function translateChangedExtraInfo(
 // written, and only rows that actually disappeared from the upstream feed get deleted (a
 // small, bounded list — not the `id NOT IN (...)` sweep that broke on this table's ~380 rows
 // with a "too many SQL variables" error earlier this session).
-export async function upsertRestrictions(db: D1Database, ai: Ai, restrictions: Restriction[]): Promise<void> {
+// Returns the restrictions whose core fields are new/different (see
+// restrictionCoreFieldsChanged) — candidates for push-notification matching, distinct from
+// `changed` below (which also includes pure translation-retry rewrites that shouldn't
+// re-trigger a notification).
+export async function upsertRestrictions(db: D1Database, ai: Ai, restrictions: Restriction[]): Promise<Restriction[]> {
   const existing = await db.prepare("SELECT * FROM restrictions").all<ExistingRestrictionRow>();
   const existingById = new Map(existing.results.map((r) => [r.id, r]));
 
   const changed = restrictions.filter((r) => restrictionNeedsWrite(existingById.get(r.id), r));
+  const changedForNotification = restrictions.filter((r) => restrictionCoreFieldsChanged(existingById.get(r.id), r));
   const translations = await translateChangedExtraInfo(db, ai, changed, existingById);
 
   const stmt = db.prepare(
@@ -258,6 +274,8 @@ export async function upsertRestrictions(db: D1Database, ai: Ai, restrictions: R
     const placeholders = disappearedIds.map(() => "?").join(",");
     await db.prepare(`DELETE FROM restrictions WHERE id IN (${placeholders})`).bind(...disappearedIds).run();
   }
+
+  return changedForNotification;
 }
 
 interface ExistingDetourRow {
@@ -422,4 +440,83 @@ export async function upsertHazardsAndGetChanged(
   );
 
   return changed;
+}
+
+// --- Push-notification matching support (see src/notify.ts) ---
+
+export interface SavedPointForMatchingRow {
+  id: number;
+  user_id: string;
+  lat: number;
+  lng: number;
+  radius_km: number;
+  event_types: string | null;
+}
+
+export async function getSavedPointsForMatching(db: D1Database): Promise<SavedPointForMatchingRow[]> {
+  const { results } = await db.prepare("SELECT * FROM saved_points").all<SavedPointForMatchingRow>();
+  return results;
+}
+
+export interface PushSubscriptionRow {
+  id: number;
+  user_id: string;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  failure_count: number;
+}
+
+export async function getPushSubscriptionsByUserIds(
+  db: D1Database,
+  userIds: string[],
+): Promise<PushSubscriptionRow[]> {
+  if (userIds.length === 0) return [];
+  const placeholders = userIds.map(() => "?").join(",");
+  const { results } = await db
+    .prepare(`SELECT * FROM push_subscriptions WHERE user_id IN (${placeholders})`)
+    .bind(...userIds)
+    .all<PushSubscriptionRow>();
+  return results;
+}
+
+export async function markHazardsNotified(db: D1Database, externalIds: string[]): Promise<void> {
+  if (externalIds.length === 0) return;
+  const placeholders = externalIds.map(() => "?").join(",");
+  await db
+    .prepare(`UPDATE hazards SET notified_at = datetime('now') WHERE external_id IN (${placeholders})`)
+    .bind(...externalIds)
+    .run();
+}
+
+export async function markRestrictionsNotified(db: D1Database, ids: number[]): Promise<void> {
+  if (ids.length === 0) return;
+  const placeholders = ids.map(() => "?").join(",");
+  await db
+    .prepare(`UPDATE restrictions SET notified_at = datetime('now') WHERE id IN (${placeholders})`)
+    .bind(...ids)
+    .run();
+}
+
+export async function deletePushSubscription(db: D1Database, id: number): Promise<void> {
+  await db.prepare("DELETE FROM push_subscriptions WHERE id = ?").bind(id).run();
+}
+
+// Threshold picked to tolerate a handful of transient 5xx responses from a push service
+// without immediately dropping a subscription over a blip, while still eventually cleaning up
+// one that's persistently failing (e.g. the push service itself deprecated that endpoint in a
+// way that doesn't map to a clean 404/410).
+const PUSH_FAILURE_PRUNE_THRESHOLD = 5;
+
+/** Increments failure_count for a 5xx response, then prunes the subscription outright once it
+ *  crosses the threshold — a persistent server-side failure is functionally the same as a
+ *  dead subscription, just without an explicit 404/410 saying so. */
+export async function recordPushFailure(db: D1Database, id: number): Promise<void> {
+  const row = await db
+    .prepare("UPDATE push_subscriptions SET failure_count = failure_count + 1 WHERE id = ? RETURNING failure_count")
+    .bind(id)
+    .first<{ failure_count: number }>();
+  if (row && row.failure_count >= PUSH_FAILURE_PRUNE_THRESHOLD) {
+    await deletePushSubscription(db, id);
+  }
 }

@@ -1,4 +1,4 @@
-import { fetchAllHazards, fetchCamerasMetadata } from "./src/tarktee";
+import type { Restriction } from "./src/arcgis";
 import { fetchDetours, fetchRestrictions, fetchVmsSigns, fetchWeatherReadings } from "./src/arcgis";
 import {
   pruneWeatherHistory,
@@ -10,12 +10,20 @@ import {
   upsertWeatherHistory,
   upsertWeatherReadings,
 } from "./src/db";
+import { notifyMatchingSavedPoints, type PushBudget } from "./src/notify";
+import type { HazardRecord } from "./src/tarktee";
+import { fetchAllHazards, fetchCamerasMetadata } from "./src/tarktee";
 
 interface Env {
   DB: D1Database;
   AI: Ai;
   // DATEX II API key, active — set via `wrangler secret put TARKTEE_API_KEY`.
   TARKTEE_API_KEY?: string;
+  // Not secret — see wrangler.toml's [vars] comment.
+  VAPID_PUBLIC_KEY: string;
+  // Real secret, set via `wrangler secret put VAPID_PRIVATE_KEY` — absent until that's done,
+  // in which case push sending is skipped entirely (see notify.ts).
+  VAPID_PRIVATE_KEY?: string;
 }
 
 const WEATHER_HISTORY_RETENTION_DAYS = 7;
@@ -53,7 +61,20 @@ async function runStep(name: string, step: () => Promise<void>): Promise<void> {
   }
 }
 
+// How many Web Push sends notifyMatchingSavedPoints is willing to make in one poll cycle —
+// same shape/reasoning as translate.ts's TranslationBudget. Push matching runs as the very
+// last step in pollFast, after weather (~1 request), hazards (up to ~7 in parallel),
+// restrictions (~1-2), detours (~1-2), vms (~3), and translation (up to 20) have already spent
+// their share of the Workers Free plan's 50-subrequest-per-invocation ceiling — this is
+// deliberately conservative about what's likely left over, not a precise remaining-budget
+// calculation (Workers doesn't expose one). Any sends that don't fit just retry next cycle (3
+// minutes later), gated by notified_at staying unset — see notify.ts.
+const MAX_PUSH_SENDS_PER_CYCLE = 15;
+
 async function pollFast(env: Env): Promise<void> {
+  let changedHazards: HazardRecord[] = [];
+  let changedRestrictions: Restriction[] = [];
+
   await runStep("weatherReadings", async () => {
     const readings = await fetchWeatherReadings();
     await upsertWeatherReadings(env.DB, readings);
@@ -67,18 +88,12 @@ async function pollFast(env: Env): Promise<void> {
   await runStep("hazards", async () => {
     // Returns [] per feed type until TARKTEE_API_KEY is active (registration pending).
     const hazards = await fetchAllHazards(env.TARKTEE_API_KEY);
-    const changedHazards = await upsertHazardsAndGetChanged(env.DB, hazards);
-
-    // Phase 4 work: match changedHazards against saved_points and send Web Push here.
-    // Not wired up yet — see src/push.ts.
-    if (changedHazards.length > 0) {
-      console.log(`${changedHazards.length} new/changed hazards this cycle (push-matching not yet wired up)`);
-    }
+    changedHazards = await upsertHazardsAndGetChanged(env.DB, hazards);
   });
 
   await runStep("restrictions", async () => {
     const restrictions = await fetchRestrictions();
-    await upsertRestrictions(env.DB, env.AI, restrictions);
+    changedRestrictions = await upsertRestrictions(env.DB, env.AI, restrictions);
   });
 
   await runStep("detours", async () => {
@@ -89,6 +104,15 @@ async function pollFast(env: Env): Promise<void> {
   await runStep("vms", async () => {
     const signs = await fetchVmsSigns();
     await upsertVmsSigns(env.DB, signs);
+  });
+
+  // Last step, deliberately — see MAX_PUSH_SENDS_PER_CYCLE.
+  await runStep("pushNotifications", async () => {
+    const vapidKeys = env.VAPID_PRIVATE_KEY
+      ? { publicKey: env.VAPID_PUBLIC_KEY, privateKey: env.VAPID_PRIVATE_KEY }
+      : null;
+    const budget: PushBudget = { remaining: MAX_PUSH_SENDS_PER_CYCLE };
+    await notifyMatchingSavedPoints(env.DB, vapidKeys, changedHazards, changedRestrictions, budget);
   });
 }
 
