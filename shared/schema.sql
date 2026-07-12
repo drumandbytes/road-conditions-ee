@@ -52,7 +52,10 @@ CREATE TABLE hazards (
   notified_at TEXT                   -- set once matching/push has run for this hazard
 );
 CREATE INDEX idx_hazards_active ON hazards(ends_at);
-CREATE INDEX idx_hazards_type ON hazards(event_type);
+-- No index on event_type — it's only ever selected, never filtered, by any current query.
+-- Every index adds a write cost on any row write that touches its column (confirmed via
+-- Cloudflare's own D1 docs), so an unused one is pure overhead. Add back if a "filter by
+-- hazard type" query ever gets built.
 
 CREATE TABLE vms_signs (
   sign_id TEXT PRIMARY KEY,
@@ -114,7 +117,11 @@ CREATE TABLE restrictions (
   lng REAL NOT NULL,
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
-CREATE INDEX idx_restrictions_date_to ON restrictions(date_to);
+-- No index on date_to — despite the name, no query anywhere in this codebase actually filters
+-- on it (the active-window filtering happens upstream, in the where-clause sent to ArcGIS, not
+-- in our own SQL). Every write to a restriction touches every column in its SET clause
+-- including date_to, so this was a real, ongoing write-quota cost with no query benefit —
+-- confirmed and dropped.
 
 -- Shared machine-translation cache, reused across any Estonian free-text field (currently
 -- restrictions.extra_info; the same mechanism can cover detours.description or hazard
