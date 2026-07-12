@@ -7,7 +7,11 @@ enabled = true
 head_sampling_rate = 1
 
 [triggers]
-crons = ["*/2 * * * *"]
+# Two schedules, dispatched in index.ts via controller.cron — split after confirming D1's
+# free write-quota was being blown ~5.7x over (weather_stations + hazards need real freshness;
+# restrictions/cameras don't change minute to minute, no reason to pay the write cost of
+# refreshing them every 3 min too).
+crons = ["*/3 * * * *", "*/30 * * * *"]
 
 [[d1_databases]]
 binding = "DB"

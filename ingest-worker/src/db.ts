@@ -51,27 +51,25 @@ export async function upsertWeatherReadings(db: D1Database, readings: WeatherRea
 }
 
 // One row per station per hour, keyed by station_name (not weather_stations.id — see
-// upsertWeatherReadings' comment on why that id isn't durable enough for history). Each poll
-// within the same hour overwrites its row via upsert, so by the time the hour rolls over the
-// row holds whatever was last measured during it — no separate "already wrote this hour"
-// tracking needed.
+// upsertWeatherReadings' comment on why that id isn't durable enough for history).
+//
+// INSERT OR IGNORE, not an upsert — a real production bug, not a theoretical one: this ran on
+// every poll cycle with ON CONFLICT DO UPDATE, which pushed D1's rows-written usage to ~5.7x
+// its free-tier daily quota (confirmed directly from the Cloudflare dashboard). Every poll
+// re-writing the same hour's row is pure waste for a table whose entire point is hourly
+// granularity — OR IGNORE means only the first poll of each hour actually writes; every
+// later poll that hour hits the (station_name, recorded_at) unique index and does nothing.
 export async function upsertWeatherHistory(
   db: D1Database,
   readings: WeatherReading[],
   hourBucket: string,
 ): Promise<void> {
   const stmt = db.prepare(
-    `INSERT INTO weather_station_history (
+    `INSERT OR IGNORE INTO weather_station_history (
        station_name, recorded_at, road_status, road_status_aggregate, road_temp, air_temp,
        precipitation_type, precipitation_intensity, wind_dir, wind_speed, air_humidity,
        visibility, grip_factor
-     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-     ON CONFLICT(station_name, recorded_at) DO UPDATE SET
-       road_status = excluded.road_status, road_status_aggregate = excluded.road_status_aggregate,
-       road_temp = excluded.road_temp, air_temp = excluded.air_temp,
-       precipitation_type = excluded.precipitation_type, precipitation_intensity = excluded.precipitation_intensity,
-       wind_dir = excluded.wind_dir, wind_speed = excluded.wind_speed, air_humidity = excluded.air_humidity,
-       visibility = excluded.visibility, grip_factor = excluded.grip_factor`,
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   await batchIfNonEmpty(
     db,
