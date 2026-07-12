@@ -68,6 +68,18 @@ export function App() {
     return () => media.removeEventListener("change", onChange);
   }, []);
 
+  // Registers the static public/service-worker.js — needed for PWA installability (the
+  // automatic install-prompt banner wants a registered SW present) and, later, for push
+  // notification handling. Runs once on mount; browsers that don't support service workers
+  // (or don't expose the API, e.g. non-HTTPS contexts) just skip it silently.
+  useEffect(() => {
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/service-worker.js").catch((err) => {
+        console.error("Service worker registration failed", err);
+      });
+    }
+  }, []);
+
   // Runs once on mount, not tied to locale — this is Stripe redirecting back after checkout,
   // not a locale-dependent concern. Clears the query params afterward either way (success or
   // cancelled) so a page refresh doesn't re-trigger the completion call with a now-stale
