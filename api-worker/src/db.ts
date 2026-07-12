@@ -66,6 +66,34 @@ export async function getRestrictions(db: D1Database): Promise<RestrictionRow[]>
   return results;
 }
 
+export interface WeatherHistoryRow {
+  recorded_at: string;
+  road_status: string | null;
+  road_status_aggregate: string | null;
+  road_temp: number | null;
+  air_temp: number | null;
+  precipitation_type: string | null;
+  precipitation_intensity: number | null;
+  wind_dir: number | null;
+  wind_speed: number | null;
+  air_humidity: number | null;
+  visibility: number | null;
+  grip_factor: number | null;
+}
+
+export async function getWeatherStationHistory(db: D1Database, stationName: string): Promise<WeatherHistoryRow[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT recorded_at, road_status, road_status_aggregate, road_temp, air_temp,
+              precipitation_type, precipitation_intensity, wind_dir, wind_speed, air_humidity,
+              visibility, grip_factor
+       FROM weather_station_history WHERE station_name = ? ORDER BY recorded_at ASC`,
+    )
+    .bind(stationName)
+    .all<WeatherHistoryRow>();
+  return results;
+}
+
 export async function getCameras(db: D1Database): Promise<CameraRow[]> {
   const { results } = await db.prepare("SELECT * FROM cameras").all<CameraRow>();
   return results;

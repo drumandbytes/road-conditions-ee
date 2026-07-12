@@ -8,6 +8,7 @@ import { handleStripeWebhook } from "./src/routes/stripe-webhook";
 import { handleSubscribe, handleUnsubscribe } from "./src/routes/subscribe";
 import { handleVms } from "./src/routes/vms";
 import { handleWeatherStations } from "./src/routes/weather";
+import { handleWeatherStationHistory } from "./src/routes/weather-history";
 
 interface Env {
   DB: D1Database;
@@ -55,6 +56,11 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (method === "GET" && cameraImageMatch) {
     const user = await authenticatePaidUser(env.DB, request);
     return handleCameraImage(cameraImageMatch[1], user, env.DB);
+  }
+  const weatherHistoryMatch = pathname.match(/^\/api\/weather-stations\/([^/]+)\/history$/);
+  if (method === "GET" && weatherHistoryMatch) {
+    const user = await authenticatePaidUser(env.DB, request);
+    return handleWeatherStationHistory(decodeURIComponent(weatherHistoryMatch[1]), user, env.DB);
   }
   if (method === "GET" && pathname === "/api/vms") {
     const user = await authenticatePaidUser(env.DB, request);

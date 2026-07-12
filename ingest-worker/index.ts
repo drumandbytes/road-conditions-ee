@@ -1,13 +1,29 @@
 import { fetchAllHazards, fetchCamerasMetadata } from "./src/tarktee";
 import { fetchRestrictions, fetchWeatherReadings } from "./src/arcgis";
-import { upsertCameras, upsertHazardsAndGetChanged, upsertRestrictions, upsertWeatherReadings } from "./src/db";
+import {
+  pruneWeatherHistory,
+  upsertCameras,
+  upsertHazardsAndGetChanged,
+  upsertRestrictions,
+  upsertWeatherHistory,
+  upsertWeatherReadings,
+} from "./src/db";
 
 interface Env {
   DB: D1Database;
-  // TARKTEE_API_KEY set once the DATEX II registration is approved (Phase 0, task submitted,
-  // pending manual Transpordiamet review as of writing) — add via `wrangler secret put`.
+  // DATEX II API key, active — set via `wrangler secret put TARKTEE_API_KEY`.
   TARKTEE_API_KEY?: string;
 }
+
+// Truncated to the hour, UTC — matches the granularity weather_station_history stores at
+// (one row per station per hour, see db.ts's upsertWeatherHistory).
+function currentHourBucket(): string {
+  const d = new Date();
+  d.setUTCMinutes(0, 0, 0);
+  return d.toISOString();
+}
+
+const WEATHER_HISTORY_RETENTION_DAYS = 7;
 
 export default {
   async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
@@ -31,6 +47,8 @@ async function pollTarkTee(env: Env): Promise<void> {
   await runStep("weatherReadings", async () => {
     const readings = await fetchWeatherReadings();
     await upsertWeatherReadings(env.DB, readings);
+    await upsertWeatherHistory(env.DB, readings, currentHourBucket());
+    await pruneWeatherHistory(env.DB, WEATHER_HISTORY_RETENTION_DAYS);
   });
 
   await runStep("restrictions", async () => {

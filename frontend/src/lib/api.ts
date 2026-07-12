@@ -46,6 +46,25 @@ export async function fetchCameraImage(cameraId: string): Promise<Response> {
   return apiFetch(`/api/cameras/${cameraId}/image`);
 }
 
+export interface WeatherHistoryReading {
+  recordedAt: string;
+  roadStatus: string | null;
+  roadStatusAggregate: string | null;
+  roadTemp: number | null;
+  airTemp: number | null;
+  precipitationType: string | null;
+  precipitationIntensity: number | null;
+  windDir: number | null;
+  windSpeed: number | null;
+  airHumidity: number | null;
+  visibility: number | null;
+  gripFactor: number | null;
+}
+
+export async function fetchWeatherStationHistory(stationName: string): Promise<Response> {
+  return apiFetch(`/api/weather-stations/${encodeURIComponent(stationName)}/history`);
+}
+
 export interface AccountStatus {
   email: string | null;
   subscriptionStatus: string;

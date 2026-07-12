@@ -113,6 +113,33 @@ CREATE TABLE restrictions (
 );
 CREATE INDEX idx_restrictions_date_to ON restrictions(date_to);
 
+-- Hourly snapshots per station, paid-tier feature. Keyed by station_name rather than
+-- weather_stations.id (the upstream ArcGIS objectid) — that id was confirmed unstable across
+-- polls (see ingest-worker's db.ts upsertWeatherReadings comment), which would silently break
+-- history continuity every time it rotated. site_name was confirmed unique across all 117
+-- current stations; using it as the durable identity instead. One row per station per hour —
+-- each poll within that hour overwrites it via upsert, so the row reflects the latest reading
+-- taken during that hour by the time it rolls over. Pruned after 7 days (see ingest-worker's
+-- pruneWeatherHistory) — D1's 5GB storage cap applies regardless of plan, so this can't grow
+-- unbounded.
+CREATE TABLE weather_station_history (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  station_name TEXT NOT NULL,
+  recorded_at TEXT NOT NULL,
+  road_status TEXT,
+  road_status_aggregate TEXT,
+  road_temp REAL,
+  air_temp REAL,
+  precipitation_type TEXT,
+  precipitation_intensity REAL,
+  wind_dir INTEGER,
+  wind_speed REAL,
+  air_humidity REAL,
+  visibility INTEGER,
+  grip_factor REAL
+);
+CREATE UNIQUE INDEX idx_weather_history_station_hour ON weather_station_history(station_name, recorded_at);
+
 CREATE TABLE cameras (
   id TEXT PRIMARY KEY,           -- UUID, from the roadCameraLocations DATEX II feed —
                                   -- deliberately not the same ID scheme as weather_stations;

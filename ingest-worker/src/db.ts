@@ -39,16 +39,57 @@ export async function upsertWeatherReadings(db: D1Database, readings: WeatherRea
 
   // The upstream objectid set isn't fully stable poll to poll — confirmed directly in
   // production (D1 accumulated 213 distinct ids from a feed that only ever reports ~117 at
-  // once). Sweep out anything that fell out of the current response, same pattern as
-  // restrictions below. Short grace window since this feed refreshes every 2 minutes, unlike
-  // restrictions' 1-hour one.
-  if (readings.length > 0) {
-    const placeholders = readings.map(() => "?").join(",");
-    await db
-      .prepare(`DELETE FROM weather_stations WHERE id NOT IN (${placeholders}) AND (last_updated_at IS NULL OR last_updated_at < datetime('now', '-10 minutes'))`)
-      .bind(...readings.map((r) => r.id))
-      .run();
-  }
+  // once). Every row still present gets its last_updated_at refreshed by the upsert above, so
+  // anything whose timestamp hasn't moved recently is exactly what fell out of the feed — no
+  // need to pass the current id set at all. (A first attempt at this used
+  // `WHERE id NOT IN (...117 placeholders...)`, which broke in production with D1_ERROR: too
+  // many SQL variables once restrictions' equivalent sweep hit ~380 placeholders — this
+  // timestamp-only version has no such ceiling.)
+  await db
+    .prepare(`DELETE FROM weather_stations WHERE last_updated_at IS NULL OR last_updated_at < datetime('now', '-10 minutes')`)
+    .run();
+}
+
+// One row per station per hour, keyed by station_name (not weather_stations.id — see
+// upsertWeatherReadings' comment on why that id isn't durable enough for history). Each poll
+// within the same hour overwrites its row via upsert, so by the time the hour rolls over the
+// row holds whatever was last measured during it — no separate "already wrote this hour"
+// tracking needed.
+export async function upsertWeatherHistory(
+  db: D1Database,
+  readings: WeatherReading[],
+  hourBucket: string,
+): Promise<void> {
+  const stmt = db.prepare(
+    `INSERT INTO weather_station_history (
+       station_name, recorded_at, road_status, road_status_aggregate, road_temp, air_temp,
+       precipitation_type, precipitation_intensity, wind_dir, wind_speed, air_humidity,
+       visibility, grip_factor
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(station_name, recorded_at) DO UPDATE SET
+       road_status = excluded.road_status, road_status_aggregate = excluded.road_status_aggregate,
+       road_temp = excluded.road_temp, air_temp = excluded.air_temp,
+       precipitation_type = excluded.precipitation_type, precipitation_intensity = excluded.precipitation_intensity,
+       wind_dir = excluded.wind_dir, wind_speed = excluded.wind_speed, air_humidity = excluded.air_humidity,
+       visibility = excluded.visibility, grip_factor = excluded.grip_factor`,
+  );
+  await batchIfNonEmpty(
+    db,
+    readings.map((r) =>
+      stmt.bind(
+        r.name, hourBucket, r.roadStatus, r.roadStatusAggregate, r.roadTemp, r.airTemp,
+        r.precipitationType, r.precipitationIntensity, r.windDir, r.windSpeed, r.airHumidity,
+        r.visibility, r.gripFactor,
+      ),
+    ),
+  );
+}
+
+export async function pruneWeatherHistory(db: D1Database, olderThanDays: number): Promise<void> {
+  await db
+    .prepare(`DELETE FROM weather_station_history WHERE recorded_at < datetime('now', ?)`)
+    .bind(`-${olderThanDays} days`)
+    .run();
 }
 
 export async function upsertRestrictions(db: D1Database, restrictions: Restriction[]): Promise<void> {
@@ -82,14 +123,10 @@ export async function upsertRestrictions(db: D1Database, restrictions: Restricti
   // Restrictions ending/no-longer-qualifying under the active-window filter (see arcgis.ts's
   // activeRestrictionsWhereClause) fall out of the upstream response entirely rather than
   // coming back with an updated date_to — so unlike hazards/cameras, stale rows here need an
-  // explicit sweep, not just an upsert.
-  if (restrictions.length > 0) {
-    const placeholders = restrictions.map(() => "?").join(",");
-    await db
-      .prepare(`DELETE FROM restrictions WHERE id NOT IN (${placeholders}) AND updated_at < datetime('now', '-1 hour')`)
-      .bind(...restrictions.map((r) => r.id))
-      .run();
-  }
+  // explicit sweep, not just an upsert. Timestamp-only check (not `id NOT IN (...)`) for the
+  // same reason as weather_stations above — confirmed in production this table's ~380 active
+  // rows overflow D1's per-statement variable limit with the NOT IN approach.
+  await db.prepare(`DELETE FROM restrictions WHERE updated_at < datetime('now', '-1 hour')`).run();
 }
 
 // Cameras are keyed by UUID (from the roadCameraLocations feed) — see tarktee.ts for why

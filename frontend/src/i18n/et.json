@@ -40,6 +40,7 @@
     "precipHail": "Rahe",
     "precipDrizzle": "Uduvihm",
     "precipFreezingRain": "Jäävihm",
+    "viewHistory": "Vaata ajalugu",
     "restrictionRoad": "Tee",
     "restrictionContractor": "Töövõtja",
     "restrictionCauseOther": "Muu",
@@ -94,6 +95,14 @@
     "loading": "Otsepildi laadimine…",
     "paywalled": "Otsepilt on tasuline funktsioon. Tellimiseks ava ⓘ menüü.",
     "error": "Selle kaamera pilti ei õnnestunud praegu laadida."
+  },
+  "weatherHistoryModal": {
+    "close": "Sulge",
+    "title": "Ajalugu",
+    "loading": "Ajaloo laadimine…",
+    "paywalled": "Jaama ajalugu on tasuline funktsioon. Tellimiseks ava ⓘ menüü.",
+    "error": "Selle jaama ajalugu ei õnnestunud praegu laadida.",
+    "empty": "Sellel jaamal pole veel ajalugu salvestatud."
   },
   "account": {
     "title": "Konto",

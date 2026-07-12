@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "preact/hooks";
 import { Map } from "./components/Map";
 import { InfoPanel } from "./components/InfoPanel";
 import { CameraModal } from "./components/CameraModal";
+import { WeatherHistoryModal } from "./components/WeatherHistoryModal";
 import { ThemeToggle } from "./components/ThemeToggle";
 import type { Locale } from "./components/InfoPanel";
 import type { Theme } from "./components/ThemeToggle";
@@ -26,6 +27,7 @@ function getInitialTheme(): Theme {
 export function App() {
   const [locale, setLocale] = useState<Locale>(getInitialLocale);
   const [selectedCamera, setSelectedCamera] = useState<{ id: string; name: string } | null>(null);
+  const [selectedWeatherHistoryStation, setSelectedWeatherHistoryStation] = useState<string | null>(null);
   const [theme, setTheme] = useState<Theme>(getInitialTheme);
   const [systemPrefersDark, setSystemPrefersDark] = useState(
     () => window.matchMedia("(prefers-color-scheme: dark)").matches,
@@ -101,6 +103,7 @@ export function App() {
         popupsT={t.popups}
         markerLabelsT={markerLabelsT}
         onCameraClick={(id, name) => setSelectedCamera({ id, name })}
+        onViewHistory={(stationName) => setSelectedWeatherHistoryStation(stationName)}
       />
       <InfoPanel t={t} locale={locale} onLocaleChange={setLocale} />
       {selectedCamera && (
@@ -108,6 +111,14 @@ export function App() {
           cameraId={selectedCamera.id}
           cameraName={selectedCamera.name}
           onClose={() => setSelectedCamera(null)}
+          t={t}
+        />
+      )}
+      {selectedWeatherHistoryStation && (
+        <WeatherHistoryModal
+          stationName={selectedWeatherHistoryStation}
+          locale={locale}
+          onClose={() => setSelectedWeatherHistoryStation(null)}
           t={t}
         />
       )}

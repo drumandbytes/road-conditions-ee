@@ -87,6 +87,7 @@ interface PopupsT {
   precipHail: string;
   precipDrizzle: string;
   precipFreezingRain: string;
+  viewHistory: string;
   restrictionRoad: string;
   restrictionContractor: string;
   restrictionCauseOther: string;
@@ -204,6 +205,7 @@ function buildWeatherPopupHtml(properties: Record<string, unknown>, locale: Loca
     <div class="map-popup-status"><span class="map-popup-status-dot" style="background:${aggregateColor}"></span>${aggregateLabel}</div>
     ${rows.length > 0 ? `<div class="map-popup-desc">${rows.join("<br>")}</div>` : ""}
     ${updated ? `<div class="map-popup-meta">${escapeHtml(t.lastUpdated)}: ${escapeHtml(updated)}</div>` : ""}
+    <button type="button" class="map-popup-history-btn">${escapeHtml(t.viewHistory)}</button>
   `;
 }
 
@@ -392,6 +394,7 @@ function openMarkerFeature(
   locale: Locale,
   popupsT: PopupsT,
   onCameraClick: (id: string, name: string) => void,
+  onViewHistory: (stationName: string) => void,
 ) {
   const properties = feature.properties ?? {};
   if (feature.source === "cameras") {
@@ -405,7 +408,21 @@ function openMarkerFeature(
       : feature.source === "restrictions"
         ? buildRestrictionPopupHtml(properties, locale, popupsT)
         : buildHazardPopupHtml(properties, locale, popupsT);
-  new maplibregl.Popup({ className: "map-popup", maxWidth: "260px" }).setLngLat(coordinates).setHTML(html).addTo(map);
+  const popup = new maplibregl.Popup({ className: "map-popup", maxWidth: "260px" })
+    .setLngLat(coordinates)
+    .setHTML(html)
+    .addTo(map);
+
+  // The history button only exists in the weather popup's HTML (see buildWeatherPopupHtml) —
+  // wired up after the fact via the popup's own DOM element, same as .setHTML() elsewhere in
+  // this file, since MapLibre popups don't offer a hook to attach listeners at build time.
+  if (feature.source === "weatherStations") {
+    const name = String(properties.name ?? "");
+    popup.getElement()?.querySelector(".map-popup-history-btn")?.addEventListener("click", () => {
+      popup.remove();
+      onViewHistory(name);
+    });
+  }
 }
 
 // Builds the small picker shown when a click hits more than one marker at once (e.g. a
@@ -451,13 +468,14 @@ function setupPointClickHandling(
   popupsT: PopupsT,
   markerLabelsT: MarkerLabelsT,
   onCameraClick: (id: string, name: string) => void,
+  onViewHistory: (stationName: string) => void,
 ) {
   map.on("click", (e) => {
     const features = map.queryRenderedFeatures(e.point, { layers: POINT_LAYER_IDS });
     if (features.length === 0) return;
 
     if (features.length === 1) {
-      openMarkerFeature(map, features[0], locale, popupsT, onCameraClick);
+      openMarkerFeature(map, features[0], locale, popupsT, onCameraClick, onViewHistory);
       return;
     }
 
@@ -465,7 +483,7 @@ function setupPointClickHandling(
     const popup = new maplibregl.Popup({ className: "map-popup" }).setLngLat(coordinates);
     const content = buildChooserContent(features, markerLabelsT, (chosen) => {
       popup.remove();
-      openMarkerFeature(map, chosen, locale, popupsT, onCameraClick);
+      openMarkerFeature(map, chosen, locale, popupsT, onCameraClick, onViewHistory);
     });
     popup.setDOMContent(content).addTo(map);
   });
@@ -477,9 +495,10 @@ interface MapProps {
   popupsT: PopupsT;
   markerLabelsT: MarkerLabelsT;
   onCameraClick: (id: string, name: string) => void;
+  onViewHistory: (stationName: string) => void;
 }
 
-export function Map({ flavor, locale, popupsT, markerLabelsT, onCameraClick }: MapProps) {
+export function Map({ flavor, locale, popupsT, markerLabelsT, onCameraClick, onViewHistory }: MapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   // Gates the loading overlay — without this, a slow or interrupted tile fetch (confirmed:
   // reloading mid-fetch reliably reproduces it) leaves a half-drawn map on screen with no
@@ -572,7 +591,7 @@ export function Map({ flavor, locale, popupsT, markerLabelsT, onCameraClick }: M
             addClusteredSource(map!, "cameras", cameras);
             addClusteredSource(map!, "hazards", hazards);
             addClusteredSource(map!, "restrictions", restrictions);
-            setupPointClickHandling(map!, locale, popupsT, markerLabelsT, onCameraClick);
+            setupPointClickHandling(map!, locale, popupsT, markerLabelsT, onCameraClick, onViewHistory);
           })
           .catch((err) => console.error("Failed to load map data layers", err))
           .finally(() => setDataReady(true));
@@ -584,9 +603,10 @@ export function Map({ flavor, locale, popupsT, markerLabelsT, onCameraClick }: M
       resizeObserver.disconnect();
       map?.remove();
     };
-  // Deliberately excludes onCameraClick — it's a fresh inline closure from app.tsx on every
-  // render there, and its own behavior (setSelectedCamera) never actually changes, so
-  // depending on it would rebuild the whole map on every unrelated app.tsx re-render.
+  // Deliberately excludes onCameraClick/onViewHistory — both are fresh inline closures from
+  // app.tsx on every render there, and their own behavior (setSelectedCamera/setSelectedWeatherHistoryStation)
+  // never actually changes, so depending on them would rebuild the whole map on every
+  // unrelated app.tsx re-render.
   }, [flavor, locale, popupsT, markerLabelsT]);
 
   return (

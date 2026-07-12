@@ -40,6 +40,7 @@
     "precipHail": "Hail",
     "precipDrizzle": "Drizzle",
     "precipFreezingRain": "Freezing rain",
+    "viewHistory": "View history",
     "restrictionRoad": "Road",
     "restrictionContractor": "Contractor",
     "restrictionCauseOther": "Other",
@@ -94,6 +95,14 @@
     "loading": "Loading live image…",
     "paywalled": "Live camera images are a paid feature. Open the ⓘ menu to subscribe.",
     "error": "Couldn't load this camera's image right now."
+  },
+  "weatherHistoryModal": {
+    "close": "Close",
+    "title": "History",
+    "loading": "Loading history…",
+    "paywalled": "Station history is a paid feature. Open the ⓘ menu to subscribe.",
+    "error": "Couldn't load this station's history right now.",
+    "empty": "No history recorded yet for this station."
   },
   "account": {
     "title": "Account",

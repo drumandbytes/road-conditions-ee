@@ -3,6 +3,7 @@ import { handleWeatherStations } from "../src/routes/weather";
 import { handleCameraImage, handleCameras } from "../src/routes/cameras";
 import { handleHazards } from "../src/routes/hazards";
 import { handleRestrictions } from "../src/routes/restrictions";
+import { handleWeatherStationHistory } from "../src/routes/weather-history";
 import { handleCheckout, handleCheckoutSession, handlePortal } from "../src/routes/checkout";
 import { handleStripeWebhook } from "../src/routes/stripe-webhook";
 import { corsHeaders, handlePreflight, isAllowedOrigin } from "../src/cors";
@@ -146,6 +147,37 @@ describe("handleHazards", () => {
     const res = await handleHazards(db);
     const body = (await res.json()) as { features: Array<{ properties: { eventType: string } }> };
     expect(body.features[0].properties.eventType).toBe("slippery");
+  });
+});
+
+describe("handleWeatherStationHistory", () => {
+  const activeUser: UserRow = {
+    id: "u1",
+    email: null,
+    stripe_customer_id: null,
+    subscription_status: "active",
+    bearer_token: "tok",
+  };
+
+  it("returns 402 when there is no authenticated paid user", async () => {
+    const db = fakeDb([]);
+    const res = await handleWeatherStationHistory("Aranküla", null, db);
+    expect(res.status).toBe(402);
+  });
+
+  it("returns hourly readings for the given station name when authenticated", async () => {
+    const db = fakeDb([
+      {
+        recorded_at: "2026-07-12T08:00:00.000Z", road_status: "DRY", road_status_aggregate: "OK",
+        road_temp: 21.7, air_temp: 17.6, precipitation_type: null, precipitation_intensity: null,
+        wind_dir: 347, wind_speed: 0.6, air_humidity: 95, visibility: 2000, grip_factor: 0.9,
+      },
+    ]);
+    const res = await handleWeatherStationHistory("Aranküla", activeUser, db);
+    const body = (await res.json()) as { stationName: string; readings: Array<{ roadTemp: number }> };
+    expect(body.stationName).toBe("Aranküla");
+    expect(body.readings).toHaveLength(1);
+    expect(body.readings[0].roadTemp).toBe(21.7);
   });
 });
 

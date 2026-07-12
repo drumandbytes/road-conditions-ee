@@ -391,6 +391,24 @@ body,
   background: var(--color-border);
 }
 
+.map-popup-history-btn {
+  display: block;
+  margin-top: 0.6rem;
+  border: none;
+  background: var(--color-bg-subtle);
+  color: var(--color-accent);
+  border-radius: var(--radius-md);
+  padding: 0.4rem 0.7rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+  width: 100%;
+  text-align: center;
+}
+
+.map-popup-history-btn:hover {
+  background: var(--color-border);
+}
+
 .legend-list {
   list-style: none;
   display: flex;
@@ -549,6 +567,36 @@ body,
   font-size: 0.85rem;
   color: var(--color-text-secondary);
   text-align: center;
+}
+
+.weather-history-list {
+  list-style: none;
+  min-width: 260px;
+  max-width: 320px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.weather-history-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 0.85rem;
+}
+
+.weather-history-row:last-child {
+  border-bottom: none;
+}
+
+.weather-history-time {
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.weather-history-summary {
+  text-align: right;
 }
 
 .account-header {
