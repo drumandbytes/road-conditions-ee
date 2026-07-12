@@ -1,0 +1,18 @@
+{
+  "features": [
+    {
+      "attributes": {
+        "objectid": 1001010521,
+        "road_nr": 1,
+        "road_name": "Tallinna-Narva tee",
+        "road_km": 10.5,
+        "angle": 248,
+        "speed_limit": 70,
+        "speed_limit_changed_at": 1783690694000,
+        "warning": null,
+        "warning_changed_at": null
+      },
+      "geometry": { "x": 547950.218298696, "y": 6544746.042970598 }
+    }
+  ]
+}

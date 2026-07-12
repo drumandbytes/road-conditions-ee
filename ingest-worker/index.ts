@@ -1,11 +1,12 @@
 import { fetchAllHazards, fetchCamerasMetadata } from "./src/tarktee";
-import { fetchDetours, fetchRestrictions, fetchWeatherReadings } from "./src/arcgis";
+import { fetchDetours, fetchRestrictions, fetchVmsSigns, fetchWeatherReadings } from "./src/arcgis";
 import {
   pruneWeatherHistory,
   upsertCameras,
   upsertDetours,
   upsertHazardsAndGetChanged,
   upsertRestrictions,
+  upsertVmsSigns,
   upsertWeatherHistory,
   upsertWeatherReadings,
 } from "./src/db";
@@ -83,6 +84,11 @@ async function pollFast(env: Env): Promise<void> {
   await runStep("detours", async () => {
     const detours = await fetchDetours();
     await upsertDetours(env.DB, detours);
+  });
+
+  await runStep("vms", async () => {
+    const signs = await fetchVmsSigns();
+    await upsertVmsSigns(env.DB, signs);
   });
 }
 

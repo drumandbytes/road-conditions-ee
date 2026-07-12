@@ -43,6 +43,7 @@ export function App() {
       cameras: t.info.legendCamerasTitle,
       hazards: t.info.legendHazardsTitle,
       restrictions: t.info.legendRestrictionsTitle,
+      vms: t.info.legendVmsTitle,
     }),
     [locale],
   );

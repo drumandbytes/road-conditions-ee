@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import weatherStationsFixture from "./mocks/arcgis-weather-stations.json";
 import restrictionsFixture from "./mocks/arcgis-restrictions.json";
-import { fetchRestrictions, fetchWeatherReadings } from "../src/arcgis";
+import vmsSignsFixture from "./mocks/arcgis-vms-signs.json";
+import { fetchRestrictions, fetchVmsSigns, fetchWeatherReadings } from "../src/arcgis";
 
 function mockFetchOnceJson(body: unknown) {
   return vi.fn().mockResolvedValue({
@@ -102,5 +103,56 @@ describe("arcgis.ts", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(restrictions).toHaveLength(1001);
     expect(String(fetchMock.mock.calls[1][0])).toContain("resultOffset=1000");
+  });
+
+  // VMS signs use a different pagination scheme than restrictions/detours — confirmed
+  // directly against the real service that it silently caps at 100 regardless of a larger
+  // resultRecordCount request, and ignores exceededTransferLimit in a way that makes the
+  // restrictions-style "trust exceededTransferLimit" loop unsafe here. Page size 50, stop
+  // when a page comes back short — verified this combination actually retrieves the full
+  // real dataset (150 of the 180 the service claims via count; the other 30 aren't
+  // retrievable by query at all, a discrepancy confirmed directly, not assumed).
+  it("parses VMS signs and transforms coordinates", async () => {
+    const fetchMock = mockFetchOnceJson(vmsSignsFixture);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const signs = await fetchVmsSigns();
+
+    expect(signs).toHaveLength(1);
+    const [s] = signs;
+    expect(s.id).toBe(1001010521);
+    expect(s.roadName).toBe("Tallinna-Narva tee");
+    expect(s.speedLimit).toBe(70);
+    expect(s.warning).toBeNull();
+    expect(s.lat).toBeGreaterThan(0);
+    expect(s.lng).toBeGreaterThan(0);
+    expect(s.speedLimitChangedAt).toBe(new Date(1783690694000).toISOString());
+  });
+
+  it("stops paginating VMS signs once a page is shorter than the page size", async () => {
+    const fetchMock = mockFetchOnceJson(vmsSignsFixture); // 1 feature, well under the 50-per-page size
+    vi.stubGlobal("fetch", fetchMock);
+
+    await fetchVmsSigns();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("requests a second VMS page when the first comes back exactly full", async () => {
+    const fullFeature = vmsSignsFixture.features[0];
+    const fullPage = { features: Array(50).fill(fullFeature) };
+    const shortPage = { features: [fullFeature] };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, status: 200, statusText: "OK", json: async () => fullPage })
+      .mockResolvedValueOnce({ ok: true, status: 200, statusText: "OK", json: async () => shortPage });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const signs = await fetchVmsSigns();
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(signs).toHaveLength(51);
+    expect(String(fetchMock.mock.calls[1][0])).toContain("resultOffset=50");
+    expect(String(fetchMock.mock.calls[0][0])).toContain("orderByFields=objectid");
   });
 });

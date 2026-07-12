@@ -1,5 +1,5 @@
 import type { CameraMeta, HazardRecord } from "./tarktee";
-import type { Detour, Restriction, WeatherReading } from "./arcgis";
+import type { Detour, Restriction, VmsSign, WeatherReading } from "./arcgis";
 import { translateWithTemplateCache } from "./translate";
 import type { TranslationBudget } from "./translate";
 
@@ -305,6 +305,74 @@ export async function upsertDetours(db: D1Database, detours: Detour[]): Promise<
   if (disappearedIds.length > 0) {
     const placeholders = disappearedIds.map(() => "?").join(",");
     await db.prepare(`DELETE FROM detours WHERE id IN (${placeholders})`).bind(...disappearedIds).run();
+  }
+}
+
+interface ExistingVmsSignRow {
+  sign_id: number;
+  road_nr: number | null;
+  road_name: string | null;
+  road_km: number | null;
+  angle: number | null;
+  speed_limit: number | null;
+  speed_limit_changed_at: string | null;
+  warning: string | null;
+  warning_changed_at: string | null;
+  lat: number;
+  lng: number;
+}
+
+function vmsSignNeedsWrite(existing: ExistingVmsSignRow | undefined, s: VmsSign): boolean {
+  if (!existing) return true;
+  return (
+    existing.road_nr !== s.roadNr ||
+    existing.road_name !== s.roadName ||
+    existing.road_km !== s.roadKm ||
+    existing.angle !== s.angle ||
+    existing.speed_limit !== s.speedLimit ||
+    existing.speed_limit_changed_at !== s.speedLimitChangedAt ||
+    existing.warning !== s.warning ||
+    existing.warning_changed_at !== s.warningChangedAt ||
+    existing.lat !== s.lat ||
+    existing.lng !== s.lng
+  );
+}
+
+// Same diff-based approach as restrictions/detours above — VMS content (speed_limit/warning)
+// changes far less often than the 3-min poll cycle, so most polls write nothing at all.
+export async function upsertVmsSigns(db: D1Database, signs: VmsSign[]): Promise<void> {
+  const existing = await db.prepare("SELECT * FROM vms_signs").all<ExistingVmsSignRow>();
+  const existingById = new Map(existing.results.map((s) => [s.sign_id, s]));
+
+  const changed = signs.filter((s) => vmsSignNeedsWrite(existingById.get(s.id), s));
+
+  const stmt = db.prepare(
+    `INSERT INTO vms_signs (
+       sign_id, road_nr, road_name, road_km, angle, speed_limit, speed_limit_changed_at,
+       warning, warning_changed_at, lat, lng, updated_at
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+     ON CONFLICT(sign_id) DO UPDATE SET
+       road_nr = excluded.road_nr, road_name = excluded.road_name, road_km = excluded.road_km,
+       angle = excluded.angle, speed_limit = excluded.speed_limit,
+       speed_limit_changed_at = excluded.speed_limit_changed_at, warning = excluded.warning,
+       warning_changed_at = excluded.warning_changed_at, lat = excluded.lat, lng = excluded.lng,
+       updated_at = datetime('now')`,
+  );
+  await batchIfNonEmpty(
+    db,
+    changed.map((s) =>
+      stmt.bind(
+        s.id, s.roadNr, s.roadName, s.roadKm, s.angle, s.speedLimit, s.speedLimitChangedAt,
+        s.warning, s.warningChangedAt, s.lat, s.lng,
+      ),
+    ),
+  );
+
+  const currentIds = new Set(signs.map((s) => s.id));
+  const disappearedIds = existing.results.map((s) => s.sign_id).filter((id) => !currentIds.has(id));
+  if (disappearedIds.length > 0) {
+    const placeholders = disappearedIds.map(() => "?").join(",");
+    await db.prepare(`DELETE FROM vms_signs WHERE sign_id IN (${placeholders})`).bind(...disappearedIds).run();
   }
 }
 

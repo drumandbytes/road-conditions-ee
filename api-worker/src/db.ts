@@ -58,8 +58,27 @@ export interface HazardRow {
   updated_at: string;
 }
 
+export interface VmsSignRow {
+  sign_id: number;
+  road_nr: number | null;
+  road_name: string | null;
+  road_km: number | null;
+  angle: number | null;
+  speed_limit: number | null;
+  speed_limit_changed_at: string | null;
+  warning: string | null;
+  warning_changed_at: string | null;
+  lat: number;
+  lng: number;
+}
+
 export async function getWeatherStations(db: D1Database): Promise<WeatherStationRow[]> {
   const { results } = await db.prepare("SELECT * FROM weather_stations").all<WeatherStationRow>();
+  return results;
+}
+
+export async function getVmsSigns(db: D1Database): Promise<VmsSignRow[]> {
+  const { results } = await db.prepare("SELECT * FROM vms_signs").all<VmsSignRow>();
   return results;
 }
 

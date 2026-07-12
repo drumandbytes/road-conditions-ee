@@ -28,6 +28,8 @@ interface InfoPanelProps {
       legendHazardsDesc: string;
       legendRestrictionsTitle: string;
       legendRestrictionsDesc: string;
+      legendVmsTitle: string;
+      legendVmsDesc: string;
       legendClusters: string;
       howToTitle: string;
       howTo1: string;
@@ -161,6 +163,13 @@ export function InfoPanel({ t, locale, onLocaleChange }: InfoPanelProps) {
                         <span class="legend-text">
                           <span class="legend-item-title">{t.info.legendRestrictionsTitle}</span>
                           <span class="legend-desc">{t.info.legendRestrictionsDesc}</span>
+                        </span>
+                      </li>
+                      <li class="legend-row">
+                        <span class="legend-icon" style={{ background: "#16a085" }} />
+                        <span class="legend-text">
+                          <span class="legend-item-title">{t.info.legendVmsTitle}</span>
+                          <span class="legend-desc">{t.info.legendVmsDesc}</span>
                         </span>
                       </li>
                     </ul>

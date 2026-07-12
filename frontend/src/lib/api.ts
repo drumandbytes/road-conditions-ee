@@ -42,6 +42,15 @@ export async function getRestrictions(): Promise<GeoJSON.FeatureCollection> {
   return (await apiFetch("/api/restrictions")).json();
 }
 
+// Unlike the four free layers above, this 402s for free/unauthenticated users (no
+// location-only tier makes sense for live sign content) — returns null rather than throwing,
+// so the map can simply omit the layer instead of treating it as a load failure.
+export async function getVmsSigns(): Promise<GeoJSON.FeatureCollection | null> {
+  const res = await apiFetch("/api/vms");
+  if (!res.ok) return null;
+  return res.json();
+}
+
 export async function fetchCameraImage(cameraId: string): Promise<Response> {
   return apiFetch(`/api/cameras/${cameraId}/image`);
 }

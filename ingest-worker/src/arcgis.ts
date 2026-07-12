@@ -258,3 +258,83 @@ export async function fetchDetours(): Promise<Detour[]> {
   }
   return detours;
 }
+
+export interface VmsSign {
+  id: number;
+  roadNr: number | null;
+  roadName: string | null;
+  roadKm: number | null;
+  angle: number | null;
+  speedLimit: number | null;
+  speedLimitChangedAt: string | null;
+  warning: string | null;
+  warningChangedAt: string | null;
+  lat: number;
+  lng: number;
+}
+
+interface VmsSignAttributes {
+  objectid: number;
+  road_nr: number | null;
+  road_name: string | null;
+  road_km: number | null;
+  angle: number | null;
+  speed_limit: number | null;
+  speed_limit_changed_at: number | null;
+  warning: string | null;
+  warning_changed_at: number | null;
+}
+
+// This layer's declared count (returnCountOnly) says 180, but only 150 are actually
+// retrievable via query regardless of ordering/offset — confirmed directly, the same
+// count-vs-query discrepancy already hit once this session with the old broken camera
+// metadata endpoint (which counted 151 entries that all had null geometry). Not chasing the
+// phantom 30 here; 150 is the real, usable dataset.
+//
+// Page size is 50, not the shared ARCGIS_PAGE_SIZE — confirmed directly that this specific
+// layer silently caps at 100 regardless of a larger resultRecordCount request, and pagination
+// past that point returns 0 rather than the remainder. 50 was verified to page correctly
+// across the full dataset with resultOffset. orderByFields=objectid keeps page boundaries
+// deterministic across separate requests.
+const VMS_PAGE_SIZE = 50;
+
+async function fetchVmsSignsPage(offset: number): Promise<ArcGisQueryResponse<VmsSignAttributes>> {
+  const params = new URLSearchParams({
+    f: "json",
+    outFields: "*",
+    where: "1=1",
+    orderByFields: "objectid",
+    resultOffset: String(offset),
+    resultRecordCount: String(VMS_PAGE_SIZE),
+  });
+  return fetchArcGisJson<VmsSignAttributes>(`${ARCGIS_BASE}/vms_traffic_signs/MapServer/0/query?${params}`);
+}
+
+export async function fetchVmsSigns(): Promise<VmsSign[]> {
+  const signs: VmsSign[] = [];
+  let offset = 0;
+  for (;;) {
+    const page = await fetchVmsSignsPage(offset);
+    for (const f of page.features) {
+      if (!f.geometry) continue;
+      const { lat, lng } = transformCoords(f.geometry.x, f.geometry.y);
+      const a = f.attributes;
+      signs.push({
+        id: a.objectid,
+        roadNr: a.road_nr,
+        roadName: a.road_name,
+        roadKm: a.road_km,
+        angle: a.angle,
+        speedLimit: a.speed_limit,
+        speedLimitChangedAt: a.speed_limit_changed_at ? new Date(a.speed_limit_changed_at).toISOString() : null,
+        warning: a.warning,
+        warningChangedAt: a.warning_changed_at ? new Date(a.warning_changed_at).toISOString() : null,
+        lat,
+        lng,
+      });
+    }
+    if (page.features.length < VMS_PAGE_SIZE) break;
+    offset += VMS_PAGE_SIZE;
+  }
+  return signs;
+}

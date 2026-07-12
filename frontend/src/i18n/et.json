@@ -61,7 +61,11 @@
     "restrictionEffectOther": "Muu piirang",
     "restrictionEffectOneWayClosed": "Üks sõidusuund suletud",
     "restrictionEffectLaneClosed": "Sõidurada suletud",
-    "restrictionEffectCompleteClosure": "Täielik sulgemine"
+    "restrictionEffectCompleteClosure": "Täielik sulgemine",
+    "vmsRoad": "Teabetahvel",
+    "vmsSpeedLimit": "Kiiruspiirang",
+    "vmsWarning": "Hoiatus",
+    "vmsNoActive": "Hetkel midagi ei kuvata"
   },
   "info": {
     "openButton": "Menüü",
@@ -82,6 +86,8 @@
     "legendHazardsDesc": "Puuduta libeda tee, õnnetuste, teetööde ja muude hoiatuste üksikasjade nägemiseks.",
     "legendRestrictionsTitle": "Teetööd ja piirangud",
     "legendRestrictionsDesc": "Puuduta sulgemiste, kiiruspiirangute ja käimasolevate tööde üksikasjade nägemiseks.",
+    "legendVmsTitle": "Muutuv-teabega liiklusmärgid",
+    "legendVmsDesc": "Muutuvmärkide reaalajas kiiruspiirangud ja hoiatused — tasuline funktsioon.",
     "legendClusters": "Numbriga ringid on lähestikuste märkide kobarad — puuduta suurendamiseks.",
     "howToTitle": "Kuidas kasutada",
     "howTo1": "Suumi näpuliigutuse või kerimisega, liiguta kaarti lohistades.",
@@ -108,7 +114,7 @@
   },
   "account": {
     "title": "Konto",
-    "subscribeBody": "Telli, et avada otsepildid kaameratest ja (peagi) asukohapõhised teavitused:",
+    "subscribeBody": "Telli, et avada otsepildid kaameratest, muutuv-teabega liiklusmärgid ja (peagi) asukohapõhised teavitused:",
     "planMonthly": "2,99 €",
     "planMonthlyUnit": "/kuus",
     "planYearly": "24,99 €",
@@ -117,8 +123,8 @@
     "trialNote": "Kuu- ja aastaplaanidel on 30-päevane tasuta prooviperiood — tühista enne selle lõppu ja sind ei debiteerita.",
     "statusActive": "Tellitud",
     "statusLifetime": "Eluaegne",
-    "activeBody": "Otsepildid kaameratest on avatud.",
-    "lifetimeBody": "Otsepildid kaameratest on jäädavalt avatud.",
+    "activeBody": "Otsepildid kaameratest ja muutuv-teabega liiklusmärgid on avatud.",
+    "lifetimeBody": "Otsepildid kaameratest ja muutuv-teabega liiklusmärgid on jäädavalt avatud.",
     "manageButton": "Halda tellimust",
     "error": "Midagi läks valesti. Proovi hetke pärast uuesti."
   }

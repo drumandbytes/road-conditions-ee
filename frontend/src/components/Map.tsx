@@ -4,7 +4,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import { Protocol } from "pmtiles";
 import { layers, namedFlavor } from "@protomaps/basemaps";
 import { ESTONIA_BOUNDS, MAX_PAN_BOUNDS, ESTONIA_TILES_URL } from "../lib/config";
-import { getCameras, getHazards, getRestrictions, getWeatherStations } from "../lib/api";
+import { getCameras, getHazards, getRestrictions, getVmsSigns, getWeatherStations } from "../lib/api";
 import type { Locale } from "./InfoPanel";
 
 // Registered once at module scope, not per-mount — addProtocol is a global maplibregl
@@ -17,6 +17,7 @@ const CLUSTER_LAYER_PAINT = {
   cameras: "#8e44ad",
   hazards: "#ff3b30",
   restrictions: "#e67e22",
+  vms: "#16a085",
 } as const;
 
 // One small white glyph per marker type, layered on top of its colored circle — plain
@@ -39,6 +40,11 @@ const ICON_SVG: Record<keyof typeof CLUSTER_LAYER_PAINT, string> = {
   restrictions:
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">' +
     '<rect fill="#fff" x="2" y="10.5" width="20" height="3" rx="1.5" transform="rotate(-25 12 12)"/></svg>',
+  // A signboard with a small pointer tail (like a roadside LED sign on its post) plus three
+  // dots suggesting lit segments — distinct from restrictions' plain bar and hazards' triangle.
+  vms:
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">' +
+    '<path fill="#fff" fill-rule="evenodd" clip-rule="evenodd" d="M4 5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-5.1l-1.4 3-1.4-3H6a2 2 0 0 1-2-2V5Zm3.2 4.5a1 1 0 1 0 0 2 1 1 0 0 0 0-2Zm3.8 0a1 1 0 1 0 0 2 1 1 0 0 0 0-2Zm3.8 0a1 1 0 1 0 0 2 1 1 0 0 0 0-2Z"/></svg>',
 };
 
 // MapLibre's addImage() needs an actual decoded image, not raw SVG markup — load each icon
@@ -109,6 +115,10 @@ interface PopupsT {
   restrictionEffectOneWayClosed: string;
   restrictionEffectLaneClosed: string;
   restrictionEffectCompleteClosure: string;
+  vmsRoad: string;
+  vmsSpeedLimit: string;
+  vmsWarning: string;
+  vmsNoActive: string;
 }
 
 // Escapes text pulled from Tark Tee's data (station names, hazard descriptions) before it
@@ -306,11 +316,37 @@ function buildRestrictionPopupHtml(properties: Record<string, unknown>, locale: 
   `;
 }
 
+// Shows whatever the sign is currently displaying (speed limit and/or warning text) rather
+// than just its location — many signs will have neither set at a given moment (nothing active
+// to warn about right now), so that's called out explicitly instead of showing an empty popup.
+function buildVmsPopupHtml(properties: Record<string, unknown>, locale: Locale, t: PopupsT): string {
+  const roadName = properties.roadName ? escapeHtml(String(properties.roadName)) : escapeHtml(t.vmsRoad);
+  const roadKm = typeof properties.roadKm === "number" ? ` (km ${properties.roadKm})` : "";
+
+  const rows: string[] = [];
+  if (typeof properties.speedLimit === "number") {
+    rows.push(`${escapeHtml(t.vmsSpeedLimit)}: ${properties.speedLimit} km/h`);
+  }
+  if (properties.warning) {
+    rows.push(`${escapeHtml(t.vmsWarning)}: ${escapeHtml(String(properties.warning))}`);
+  }
+
+  const changedAtIso = properties.warningChangedAt ?? properties.speedLimitChangedAt;
+  const changedAt = formatDateTime(changedAtIso ? String(changedAtIso) : null, locale);
+
+  return `
+    <div class="map-popup-title">${roadName}${roadKm}</div>
+    <div class="map-popup-desc">${rows.length > 0 ? rows.join("<br>") : escapeHtml(t.vmsNoActive)}</div>
+    ${changedAt ? `<div class="map-popup-meta">${escapeHtml(t.lastUpdated)}: ${escapeHtml(changedAt)}</div>` : ""}
+  `;
+}
+
 interface MarkerLabelsT {
   weatherStations: string;
   cameras: string;
   hazards: string;
   restrictions: string;
+  vms: string;
 }
 
 function addClusteredSource(map: maplibregl.Map, id: keyof typeof CLUSTER_LAYER_PAINT, data: GeoJSON.FeatureCollection) {
@@ -397,10 +433,6 @@ function addClusteredSource(map: maplibregl.Map, id: keyof typeof CLUSTER_LAYER_
   }
 }
 
-const POINT_LAYER_IDS = (Object.keys(CLUSTER_LAYER_PAINT) as (keyof typeof CLUSTER_LAYER_PAINT)[]).map(
-  (key) => `${key}-point`,
-);
-
 function openMarkerFeature(
   map: maplibregl.Map,
   feature: maplibregl.MapGeoJSONFeature,
@@ -420,7 +452,9 @@ function openMarkerFeature(
       ? buildWeatherPopupHtml(properties, locale, popupsT)
       : feature.source === "restrictions"
         ? buildRestrictionPopupHtml(properties, locale, popupsT)
-        : buildHazardPopupHtml(properties, locale, popupsT);
+        : feature.source === "vms"
+          ? buildVmsPopupHtml(properties, locale, popupsT)
+          : buildHazardPopupHtml(properties, locale, popupsT);
   const popup = new maplibregl.Popup({ className: "map-popup", maxWidth: "260px" })
     .setLngLat(coordinates)
     .setHTML(html)
@@ -477,6 +511,7 @@ function buildChooserContent(
 // more than one, never both.
 function setupPointClickHandling(
   map: maplibregl.Map,
+  pointLayerIds: string[],
   locale: Locale,
   popupsT: PopupsT,
   markerLabelsT: MarkerLabelsT,
@@ -484,7 +519,7 @@ function setupPointClickHandling(
   onViewHistory: (stationName: string) => void,
 ) {
   map.on("click", (e) => {
-    const features = map.queryRenderedFeatures(e.point, { layers: POINT_LAYER_IDS });
+    const features = map.queryRenderedFeatures(e.point, { layers: pointLayerIds });
     if (features.length === 0) return;
 
     if (features.length === 1) {
@@ -600,11 +635,41 @@ export function Map({ flavor, locale, popupsT, markerLabelsT, onCameraClick, onV
         )
           .then(() => Promise.all([getWeatherStations(), getCameras(), getHazards(), getRestrictions()]))
           .then(([weatherStations, cameras, hazards, restrictions]) => {
+            const addedLayerIds: (keyof typeof CLUSTER_LAYER_PAINT)[] = [
+              "weatherStations",
+              "cameras",
+              "hazards",
+              "restrictions",
+            ];
             addClusteredSource(map!, "weatherStations", weatherStations);
             addClusteredSource(map!, "cameras", cameras);
             addClusteredSource(map!, "hazards", hazards);
             addClusteredSource(map!, "restrictions", restrictions);
-            setupPointClickHandling(map!, locale, popupsT, markerLabelsT, onCameraClick, onViewHistory);
+            // Fetched separately from the four free layers above so its own failure — a 402 for
+            // free/unauthenticated users (resolved to null, not thrown, by getVmsSigns), or any
+            // other network error (caught here too) — never falls into the shared .catch()
+            // below, which would otherwise drop click handling for every other layer just
+            // because this one paid layer isn't available.
+            return getVmsSigns()
+              .catch((err) => {
+                console.error("Failed to load VMS layer", err);
+                return null;
+              })
+              .then((vms) => {
+                if (vms) {
+                  addClusteredSource(map!, "vms", vms);
+                  addedLayerIds.push("vms");
+                }
+                setupPointClickHandling(
+                  map!,
+                  addedLayerIds.map((id) => `${id}-point`),
+                  locale,
+                  popupsT,
+                  markerLabelsT,
+                  onCameraClick,
+                  onViewHistory,
+                );
+              });
           })
           .catch((err) => console.error("Failed to load map data layers", err))
           .finally(() => setDataReady(true));

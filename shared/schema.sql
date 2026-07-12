@@ -57,11 +57,25 @@ CREATE INDEX idx_hazards_active ON hazards(ends_at);
 -- Cloudflare's own D1 docs), so an unused one is pure overhead. Add back if a "filter by
 -- hazard type" query ever gets built.
 
+-- Electronic road sign (VMS) content, from the same ArcGIS service pattern as
+-- weather_stations/restrictions/detours (tram/vms_traffic_signs). sign_id is that service's
+-- own objectid — confirmed only ~150 of the 180 it claims via count are actually retrievable
+-- by query (see ingest-worker/src/arcgis.ts's fetchVmsSigns comment), same discrepancy already
+-- seen once with the old broken camera metadata feed. Fully paid-gated (unlike cameras, whose
+-- locations are free) — the whole value of this data is the live speed_limit/warning content,
+-- there's no meaningful free "just the location" tier for a sign with no other content.
 CREATE TABLE vms_signs (
-  sign_id TEXT PRIMARY KEY,
+  sign_id INTEGER PRIMARY KEY,
+  road_nr INTEGER,
+  road_name TEXT,
+  road_km REAL,
+  angle INTEGER,
+  speed_limit INTEGER,
+  speed_limit_changed_at TEXT,
+  warning TEXT,
+  warning_changed_at TEXT,
   lat REAL NOT NULL,
   lng REAL NOT NULL,
-  current_text TEXT,
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
