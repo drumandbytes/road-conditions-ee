@@ -360,6 +360,14 @@ body,
   margin-top: 0.4rem;
 }
 
+.map-popup-machine-translated {
+  display: block;
+  font-size: 0.7rem;
+  font-style: italic;
+  color: var(--color-text-secondary);
+  margin-top: 0.2rem;
+}
+
 .map-popup-meta {
   font-size: 0.75rem;
   color: var(--color-text-secondary);

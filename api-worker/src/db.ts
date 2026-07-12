@@ -26,6 +26,7 @@ export interface RestrictionRow {
   cause: string | null;
   effect: string | null;
   extra_info: string | null;
+  extra_info_en: string | null;
   detour_comment: string | null;
   contractor_organization: string | null;
   contractor_contact_phone: string | null;

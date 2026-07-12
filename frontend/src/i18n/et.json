@@ -44,6 +44,7 @@
     "restrictionRoad": "Tee",
     "restrictionContractor": "Töövõtja",
     "restrictionDetour": "Ümbersõit",
+    "machineTranslated": "Masintõlge, ebatäpsused võimalikud",
     "restrictionCauseOther": "Muu",
     "restrictionCauseConstruction": "Ehitustööd",
     "restrictionCauseEvent": "Üritus",

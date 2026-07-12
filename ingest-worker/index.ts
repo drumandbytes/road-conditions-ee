@@ -12,16 +12,21 @@ import {
 
 interface Env {
   DB: D1Database;
+  AI: Ai;
   // DATEX II API key, active — set via `wrangler secret put TARKTEE_API_KEY`.
   TARKTEE_API_KEY?: string;
 }
 
 const WEATHER_HISTORY_RETENTION_DAYS = 7;
 
-// Two cron schedules (wrangler.toml), dispatched by pattern. Split after confirming D1's free
-// 100k-writes/day quota was being blown ~5.7x over (569k/day at the old every-2-min-for-
-// everything cadence) — weather/hazards benefit from staying fresh, restrictions/cameras
-// don't change minute to minute and were the majority of the waste.
+// Two cron schedules (wrangler.toml), dispatched by pattern. Originally split to fix a D1
+// write-quota blowout (569k/day at every-2-min-for-everything) by moving restrictions/cameras
+// to a slower cadence — but that traded write volume for staleness (a brand new closure could
+// take up to 30 minutes to appear). Fixed properly instead: upsertRestrictions/upsertDetours
+// now diff against what's already stored and only write rows that actually changed, so their
+// write cost tracks real-world change frequency rather than poll frequency — safe to move back
+// onto the fast cadence. cameras stays slow; camera locations essentially never change and
+// there's no freshness reason to poll them as often as restrictions/weather.
 const FAST_CRON = "*/3 * * * *";
 const SLOW_CRON = "*/30 * * * *";
 
@@ -69,19 +74,19 @@ async function pollFast(env: Env): Promise<void> {
       console.log(`${changedHazards.length} new/changed hazards this cycle (push-matching not yet wired up)`);
     }
   });
-}
 
-async function pollSlow(env: Env): Promise<void> {
   await runStep("restrictions", async () => {
     const restrictions = await fetchRestrictions();
-    await upsertRestrictions(env.DB, restrictions);
+    await upsertRestrictions(env.DB, env.AI, restrictions);
   });
 
   await runStep("detours", async () => {
     const detours = await fetchDetours();
     await upsertDetours(env.DB, detours);
   });
+}
 
+async function pollSlow(env: Env): Promise<void> {
   await runStep("cameras", async () => {
     const cameras = await fetchCamerasMetadata();
     await upsertCameras(env.DB, cameras);

@@ -100,6 +100,9 @@ CREATE TABLE restrictions (
   cause TEXT,
   effect TEXT,
   extra_info TEXT,
+  extra_info_en TEXT,           -- machine-translated cache of extra_info (Workers AI, see
+                                 -- ingest-worker's translate.ts) — extra_info only ever comes
+                                 -- from Tark Tee in Estonian, no English variant exists upstream
   detour_comment TEXT,
   contractor_organization TEXT,
   contractor_contact_phone TEXT,
@@ -112,6 +115,20 @@ CREATE TABLE restrictions (
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX idx_restrictions_date_to ON restrictions(date_to);
+
+-- Shared machine-translation cache, reused across any Estonian free-text field (currently
+-- restrictions.extra_info; the same mechanism can cover detours.description or hazard
+-- descriptions later without a separate cache). Keyed by source_template, not raw source
+-- text — digit sequences are normalized to {0},{1},... placeholders first (see
+-- ingest-worker's translate.ts normalizeToTemplate), so texts that differ only by an embedded
+-- number ("Kiirus piiratud 30 km/h." / "...50 km/h.") share one cached translation instead of
+-- each needing its own Workers AI call. Confirmed directly against real restriction text: 19
+-- of 265 sampled shared that exact template.
+CREATE TABLE translations (
+  source_template TEXT PRIMARY KEY,
+  translated_template TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 
 -- Hourly snapshots per station, paid-tier feature. Keyed by station_name rather than
 -- weather_stations.id (the upstream ArcGIS objectid) — that id was confirmed unstable across

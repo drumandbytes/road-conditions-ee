@@ -61,7 +61,8 @@ describe("handleRestrictions", () => {
     const db = fakeDb([
       {
         id: 1607, road_nr: 16187, road_name: "Kõmsi - Mõisaküla - Salevere", road_type: "SECONDARY_ROAD",
-        cause: "PAVING", effect: "SPEED_LIMITED", extra_info: "info", detour_comment: null,
+        cause: "PAVING", effect: "SPEED_LIMITED", extra_info: "Kiirus piiratud 30 km/h.", extra_info_en: "Speed limited to 30 km/h.",
+        detour_comment: null,
         contractor_organization: "AS TREV-2 Grupp", contractor_contact_phone: "53 359 067",
         traffic_ctrl_organization: null, traffic_ctrl_contact_phone: "53 407 504",
         date_from: "2017-09-03T21:00:00.000Z", date_to: null, lat: 58.6, lng: 24.5,
@@ -69,9 +70,10 @@ describe("handleRestrictions", () => {
       },
     ]);
     const res = await handleRestrictions(db);
-    const body = (await res.json()) as { features: Array<{ properties: { roadName: string; cause: string; detourDescription: string } }> };
+    const body = (await res.json()) as { features: Array<{ properties: { roadName: string; cause: string; detourDescription: string; extraInfoEn: string } }> };
     expect(body.features[0].properties.roadName).toBe("Kõmsi - Mõisaküla - Salevere");
     expect(body.features[0].properties.cause).toBe("PAVING");
+    expect(body.features[0].properties.extraInfoEn).toBe("Speed limited to 30 km/h.");
     expect(body.features[0].properties.detourDescription).toBe("Ümbersõit on korraldatud Kose mnt kaudu.");
   });
 });

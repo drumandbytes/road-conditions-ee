@@ -14,6 +14,10 @@ export async function handleRestrictions(db: D1Database): Promise<Response> {
         cause: r.cause,
         effect: r.effect,
         extraInfo: r.extra_info,
+        // Machine-translated (Workers AI) — extra_info only ever comes from Tark Tee in
+        // Estonian, no English variant exists upstream. Frontend labels this as machine
+        // translated when it shows it.
+        extraInfoEn: r.extra_info_en,
         // detour_comment (from restrictions_traffic itself) is rarely populated in practice —
         // confirmed only 6 of 386 active restrictions have it. detour_description (joined from
         // the separate tram/detours service) is the real source for this; prefer it.

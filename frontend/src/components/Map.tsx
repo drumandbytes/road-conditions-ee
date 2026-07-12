@@ -91,6 +91,7 @@ interface PopupsT {
   restrictionRoad: string;
   restrictionContractor: string;
   restrictionDetour: string;
+  machineTranslated: string;
   restrictionCauseOther: string;
   restrictionCauseConstruction: string;
   restrictionCauseEvent: string;
@@ -277,7 +278,16 @@ function buildRestrictionPopupHtml(properties: Record<string, unknown>, locale: 
   const effectColor = RESTRICTION_EFFECT_COLOR[effect] ?? "var(--color-text-secondary)";
   const causeLabelKey = RESTRICTION_CAUSE_LABEL_KEY[String(properties.cause ?? "")];
   const causeLabel = causeLabelKey ? escapeHtml(t[causeLabelKey]) : null;
-  const extraInfo = properties.extraInfo ? escapeHtml(String(properties.extraInfo)) : null;
+  // extraInfo only ever comes from Tark Tee in Estonian (no upstream English variant exists) —
+  // extraInfoEn is a Workers AI machine translation, cached in D1 by ingest-worker. Shown only
+  // in English locale, with a disclaimer, falling back to the Estonian original if translation
+  // isn't available yet (e.g. a brand-new restriction the next poll hasn't translated yet).
+  const showTranslation = locale === "en" && Boolean(properties.extraInfoEn);
+  const extraInfo = showTranslation
+    ? escapeHtml(String(properties.extraInfoEn))
+    : properties.extraInfo
+      ? escapeHtml(String(properties.extraInfo))
+      : null;
   const dateFrom = formatDateTime(properties.dateFrom ? String(properties.dateFrom) : null, locale);
   const dateTo = formatDateTime(properties.dateTo ? String(properties.dateTo) : null, locale);
   const timeLine = dateFrom
@@ -289,7 +299,7 @@ function buildRestrictionPopupHtml(properties: Record<string, unknown>, locale: 
   return `
     <div class="map-popup-title"><span class="map-popup-status-dot" style="background:${effectColor}"></span>${roadName}</div>
     <div class="map-popup-status">${effectLabel}${causeLabel ? ` — ${causeLabel}` : ""}</div>
-    ${extraInfo ? `<div class="map-popup-desc">${extraInfo}</div>` : ""}
+    ${extraInfo ? `<div class="map-popup-desc">${extraInfo}${showTranslation ? `<span class="map-popup-machine-translated">${escapeHtml(t.machineTranslated)}</span>` : ""}</div>` : ""}
     ${timeLine ? `<div class="map-popup-meta">${timeLine}</div>` : ""}
     ${detour ? `<div class="map-popup-meta">${escapeHtml(t.restrictionDetour)}: ${detour}</div>` : ""}
     ${contractor ? `<div class="map-popup-meta">${escapeHtml(t.restrictionContractor)}: ${contractor}</div>` : ""}

@@ -1,5 +1,7 @@
 import type { CameraMeta, HazardRecord } from "./tarktee";
 import type { Detour, Restriction, WeatherReading } from "./arcgis";
+import { translateWithTemplateCache } from "./translate";
+import type { TranslationBudget } from "./translate";
 
 // db.batch([]) throws "D1_ERROR: No SQL statements detected" on an empty array — confirmed
 // in production (broke the cameras upsert when every entry from the old, broken metadata
@@ -90,16 +92,147 @@ export async function pruneWeatherHistory(db: D1Database, olderThanDays: number)
     .run();
 }
 
-export async function upsertRestrictions(db: D1Database, restrictions: Restriction[]): Promise<void> {
+// Bounded-concurrency map — keeps translation throughput steady and predictable. Doesn't by
+// itself cap the *total* number of AI calls in an invocation (see MAX_TRANSLATIONS_PER_CYCLE
+// / TranslationBudget for that — confirmed directly in production that the real ceiling is a
+// total-count one, not a concurrency one).
+async function mapWithConcurrency<T>(items: T[], concurrency: number, fn: (item: T) => Promise<void>): Promise<void> {
+  let index = 0;
+  async function worker(): Promise<void> {
+    while (index < items.length) {
+      await fn(items[index++]);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, worker));
+}
+
+// How many AI calls translateChangedExtraInfo is willing to make in one poll — see
+// TranslationBudget in translate.ts for why this exists (the 50-subrequest-per-invocation
+// ceiling on Workers Free, shared with every other fetch() this poll cycle makes). Deliberately
+// well under the ~40 that'd theoretically be left after weather/hazards/restrictions/detours'
+// own fetches, since hazards alone can fire up to 7 in parallel.
+const TRANSLATE_CONCURRENCY = 8;
+const MAX_TRANSLATIONS_PER_CYCLE = 20;
+
+interface ExistingRestrictionRow {
+  id: number;
+  road_nr: number | null;
+  road_name: string | null;
+  road_type: string | null;
+  cause: string | null;
+  effect: string | null;
+  extra_info: string | null;
+  extra_info_en: string | null;
+  detour_comment: string | null;
+  contractor_organization: string | null;
+  contractor_contact_phone: string | null;
+  traffic_ctrl_organization: string | null;
+  traffic_ctrl_contact_phone: string | null;
+  date_from: string | null;
+  date_to: string | null;
+  lat: number;
+  lng: number;
+}
+
+// True when the raw upstream fields differ, OR when extra_info is set but was never
+// successfully translated (a retry candidate) — both cases need this row written; a row whose
+// fields are byte-identical to what's already stored needs nothing at all.
+function restrictionNeedsWrite(existing: ExistingRestrictionRow | undefined, r: Restriction): boolean {
+  if (!existing) return true;
+  if (r.extraInfo && !existing.extra_info_en) return true;
+  return (
+    existing.road_nr !== r.roadNr ||
+    existing.road_name !== r.roadName ||
+    existing.road_type !== r.roadType ||
+    existing.cause !== r.cause ||
+    existing.effect !== r.effect ||
+    existing.extra_info !== r.extraInfo ||
+    existing.detour_comment !== r.detourComment ||
+    existing.contractor_organization !== r.contractorOrganization ||
+    existing.contractor_contact_phone !== r.contractorContactPhone ||
+    existing.traffic_ctrl_organization !== r.trafficCtrlOrganization ||
+    existing.traffic_ctrl_contact_phone !== r.trafficCtrlContactPhone ||
+    existing.date_from !== r.dateFrom ||
+    existing.date_to !== r.dateTo ||
+    existing.lat !== r.lat ||
+    existing.lng !== r.lng
+  );
+}
+
+// Translates extra_info (Estonian-only free text, no upstream English variant — see
+// translate.ts) and caches it in extra_info_en, rather than re-translating identical text
+// every poll. Takes the already-fetched existingById map from upsertRestrictions (which needs
+// the full table read anyway to diff every field, not just extra_info) rather than doing its
+// own separate SELECT. Cache layers, cheapest first: (1) this exact restriction's own row, if
+// its extra_info hasn't changed since last poll; (2) other restrictions in *this same batch*
+// with byte-identical extra_info, deduped before any AI call; (3) the shared translations
+// table inside translateWithTemplateCache, keyed by template — covers a *different*
+// restriction whose text matches a known pattern, e.g. every "Kiirus piiratud {N} km/h."
+// variant. Only a genuine miss on all three reaches Workers AI, and even then only up to
+// MAX_TRANSLATIONS_PER_CYCLE times.
+async function translateChangedExtraInfo(
+  db: D1Database,
+  ai: Ai,
+  restrictions: Restriction[],
+  existingById: Map<number, ExistingRestrictionRow>,
+): Promise<Map<number, string | null>> {
+  const withExtraInfo = restrictions.filter((r) => r.extraInfo);
+  if (withExtraInfo.length === 0) return new Map();
+
+  const translations = new Map<number, string | null>();
+  const needsTranslation: Restriction[] = [];
+  for (const r of withExtraInfo) {
+    const prior = existingById.get(r.id);
+    if (prior && prior.extra_info === r.extraInfo && prior.extra_info_en) {
+      translations.set(r.id, prior.extra_info_en);
+    } else {
+      needsTranslation.push(r);
+    }
+  }
+
+  const distinctTexts = [...new Set(needsTranslation.map((r) => r.extraInfo!))];
+  // Real AI calls share the same 50-per-invocation subrequest budget as every fetch() this
+  // poll cycle makes elsewhere (weather, hazards, restrictions, detours) — capped well under
+  // that to leave room for the rest. Cache hits don't count against it (see translate.ts), so
+  // this only throttles genuinely new/changed text; anything left over this cycle just retries
+  // next poll (3 minutes later) since extra_info_en stays null until it succeeds.
+  const budget: TranslationBudget = { remaining: MAX_TRANSLATIONS_PER_CYCLE };
+  const textTranslations = new Map<string, string | null>();
+  await mapWithConcurrency(distinctTexts, TRANSLATE_CONCURRENCY, async (text) => {
+    textTranslations.set(text, await translateWithTemplateCache(db, ai, text, budget));
+  });
+
+  for (const r of needsTranslation) {
+    translations.set(r.id, textTranslations.get(r.extraInfo!) ?? null);
+  }
+  return translations;
+}
+
+// Diffs against what's already stored rather than blindly rewriting every row every poll —
+// this is what makes it safe to fetch restrictions on the same 3-min cadence as weather (it
+// used to be a 30-min-only feed specifically to keep write volume down, which meant a brand
+// new closure or a changed detour could take up to 30 minutes to show up). Rows whose fields
+// are unchanged from last poll cost nothing at all; only genuinely new/changed rows get
+// written, and only rows that actually disappeared from the upstream feed get deleted (a
+// small, bounded list — not the `id NOT IN (...)` sweep that broke on this table's ~380 rows
+// with a "too many SQL variables" error earlier this session).
+export async function upsertRestrictions(db: D1Database, ai: Ai, restrictions: Restriction[]): Promise<void> {
+  const existing = await db.prepare("SELECT * FROM restrictions").all<ExistingRestrictionRow>();
+  const existingById = new Map(existing.results.map((r) => [r.id, r]));
+
+  const changed = restrictions.filter((r) => restrictionNeedsWrite(existingById.get(r.id), r));
+  const translations = await translateChangedExtraInfo(db, ai, changed, existingById);
+
   const stmt = db.prepare(
     `INSERT INTO restrictions (
-       id, road_nr, road_name, road_type, cause, effect, extra_info, detour_comment,
+       id, road_nr, road_name, road_type, cause, effect, extra_info, extra_info_en, detour_comment,
        contractor_organization, contractor_contact_phone, traffic_ctrl_organization,
        traffic_ctrl_contact_phone, date_from, date_to, lat, lng, updated_at
-     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
      ON CONFLICT(id) DO UPDATE SET
        road_nr = excluded.road_nr, road_name = excluded.road_name, road_type = excluded.road_type,
        cause = excluded.cause, effect = excluded.effect, extra_info = excluded.extra_info,
+       extra_info_en = excluded.extra_info_en,
        detour_comment = excluded.detour_comment, contractor_organization = excluded.contractor_organization,
        contractor_contact_phone = excluded.contractor_contact_phone,
        traffic_ctrl_organization = excluded.traffic_ctrl_organization,
@@ -109,25 +242,52 @@ export async function upsertRestrictions(db: D1Database, restrictions: Restricti
   );
   await batchIfNonEmpty(
     db,
-    restrictions.map((r) =>
+    changed.map((r) =>
       stmt.bind(
-        r.id, r.roadNr, r.roadName, r.roadType, r.cause, r.effect, r.extraInfo, r.detourComment,
+        r.id, r.roadNr, r.roadName, r.roadType, r.cause, r.effect, r.extraInfo,
+        translations.get(r.id) ?? null, r.detourComment,
         r.contractorOrganization, r.contractorContactPhone, r.trafficCtrlOrganization,
         r.trafficCtrlContactPhone, r.dateFrom, r.dateTo, r.lat, r.lng,
       ),
     ),
   );
 
-  // Restrictions ending/no-longer-qualifying under the active-window filter (see arcgis.ts's
-  // activeRestrictionsWhereClause) fall out of the upstream response entirely rather than
-  // coming back with an updated date_to — so unlike hazards/cameras, stale rows here need an
-  // explicit sweep, not just an upsert. Timestamp-only check (not `id NOT IN (...)`) for the
-  // same reason as weather_stations above — confirmed in production this table's ~380 active
-  // rows overflow D1's per-statement variable limit with the NOT IN approach.
-  await db.prepare(`DELETE FROM restrictions WHERE updated_at < datetime('now', '-1 hour')`).run();
+  const currentIds = new Set(restrictions.map((r) => r.id));
+  const disappearedIds = existing.results.map((r) => r.id).filter((id) => !currentIds.has(id));
+  if (disappearedIds.length > 0) {
+    const placeholders = disappearedIds.map(() => "?").join(",");
+    await db.prepare(`DELETE FROM restrictions WHERE id IN (${placeholders})`).bind(...disappearedIds).run();
+  }
 }
 
+interface ExistingDetourRow {
+  id: number;
+  restriction_id: number | null;
+  description: string | null;
+  date_from: string | null;
+  date_to: string | null;
+}
+
+function detourNeedsWrite(existing: ExistingDetourRow | undefined, d: Detour): boolean {
+  if (!existing) return true;
+  return (
+    existing.restriction_id !== d.restrictionId ||
+    existing.description !== d.description ||
+    existing.date_from !== d.dateFrom ||
+    existing.date_to !== d.dateTo
+  );
+}
+
+// Same diff-based approach as restrictions above, for the same reason — lets this run on the
+// fast cron alongside the restriction it's tied to, instead of lagging up to 30 minutes behind.
 export async function upsertDetours(db: D1Database, detours: Detour[]): Promise<void> {
+  const existing = await db
+    .prepare("SELECT id, restriction_id, description, date_from, date_to FROM detours")
+    .all<ExistingDetourRow>();
+  const existingById = new Map(existing.results.map((d) => [d.id, d]));
+
+  const changed = detours.filter((d) => detourNeedsWrite(existingById.get(d.id), d));
+
   const stmt = db.prepare(
     `INSERT INTO detours (id, restriction_id, description, date_from, date_to, updated_at)
      VALUES (?, ?, ?, ?, ?, datetime('now'))
@@ -137,11 +297,15 @@ export async function upsertDetours(db: D1Database, detours: Detour[]): Promise<
   );
   await batchIfNonEmpty(
     db,
-    detours.map((d) => stmt.bind(d.id, d.restrictionId, d.description, d.dateFrom, d.dateTo)),
+    changed.map((d) => stmt.bind(d.id, d.restrictionId, d.description, d.dateFrom, d.dateTo)),
   );
 
-  // Same stale-row reasoning as restrictions above (timestamp-only, not id NOT IN).
-  await db.prepare(`DELETE FROM detours WHERE updated_at < datetime('now', '-1 hour')`).run();
+  const currentIds = new Set(detours.map((d) => d.id));
+  const disappearedIds = existing.results.map((d) => d.id).filter((id) => !currentIds.has(id));
+  if (disappearedIds.length > 0) {
+    const placeholders = disappearedIds.map(() => "?").join(",");
+    await db.prepare(`DELETE FROM detours WHERE id IN (${placeholders})`).bind(...disappearedIds).run();
+  }
 }
 
 // Cameras are keyed by UUID (from the roadCameraLocations feed) — see tarktee.ts for why

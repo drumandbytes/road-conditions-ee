@@ -44,6 +44,7 @@
     "restrictionRoad": "Road",
     "restrictionContractor": "Contractor",
     "restrictionDetour": "Detour",
+    "machineTranslated": "Machine translated, inaccuracies possible",
     "restrictionCauseOther": "Other",
     "restrictionCauseConstruction": "Construction",
     "restrictionCauseEvent": "Event",
