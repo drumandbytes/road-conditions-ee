@@ -2,6 +2,7 @@ import { authenticatePaidUser } from "./src/auth";
 import { corsHeaders, handlePreflight, isAllowedOrigin } from "./src/cors";
 import { handleCameraImage, handleCameras } from "./src/routes/cameras";
 import { handleCheckout, handleCheckoutSession, handlePortal } from "./src/routes/checkout";
+import { handleGeocode } from "./src/routes/geocode";
 import { handleHazards } from "./src/routes/hazards";
 import { handlePushSubscription } from "./src/routes/push-subscription";
 import { handleRestrictions } from "./src/routes/restrictions";
@@ -50,6 +51,9 @@ async function route(request: Request, env: Env): Promise<Response> {
   }
   if (method === "GET" && pathname === "/api/restrictions") {
     return handleRestrictions(env.DB);
+  }
+  if (method === "GET" && pathname === "/api/geocode") {
+    return handleGeocode(request);
   }
 
   // Paid-gated routes.

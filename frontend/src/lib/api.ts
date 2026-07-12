@@ -114,3 +114,69 @@ export async function startPortalSession(): Promise<string> {
   if (!body.url) throw new Error(body.error ?? "Failed to open billing portal");
   return body.url;
 }
+
+export interface GeocodeCandidate {
+  label: string;
+  lat: number;
+  lng: number;
+}
+
+/** Free, unauthenticated — see api-worker's geocode route for why this isn't Tark Tee's own
+ *  ArcGIS geocoder. Returns [] on any failure (too-short query, upstream error) rather than
+ *  throwing — the search box just shows "no results" either way. */
+export async function searchAddress(query: string): Promise<GeocodeCandidate[]> {
+  const res = await apiFetch(`/api/geocode?q=${encodeURIComponent(query)}`);
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export interface SavedPoint {
+  id: number;
+  label: string;
+  lat: number;
+  lng: number;
+  radiusKm: number;
+  eventTypes: string[] | null;
+}
+
+export async function getSavedPoints(): Promise<SavedPoint[]> {
+  const res = await apiFetch("/api/subscribe");
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export async function createSavedPoint(params: {
+  label: string;
+  lat: number;
+  lng: number;
+  radiusKm: number;
+  eventTypes: string[] | null;
+}): Promise<SavedPoint> {
+  const res = await apiFetch("/api/subscribe", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  });
+  const body = (await res.json()) as SavedPoint & { error?: string };
+  if (!res.ok) throw new Error(body.error ?? "Failed to save location");
+  return body;
+}
+
+export async function deleteSavedPoint(id: number): Promise<void> {
+  const res = await apiFetch(`/api/subscribe/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error("Failed to remove saved location");
+}
+
+export interface PushSubscriptionKeys {
+  endpoint: string;
+  keys: { p256dh: string; auth: string };
+}
+
+export async function registerPushSubscription(subscription: PushSubscriptionKeys): Promise<void> {
+  const res = await apiFetch("/api/push-subscription", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(subscription),
+  });
+  if (!res.ok) throw new Error("Failed to register push subscription");
+}

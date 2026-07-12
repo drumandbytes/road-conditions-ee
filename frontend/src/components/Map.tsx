@@ -544,15 +544,38 @@ interface MapProps {
   markerLabelsT: MarkerLabelsT;
   onCameraClick: (id: string, name: string) => void;
   onViewHistory: (stationName: string) => void;
+  // Saved-point placement — a draggable pin shown/moved independently of the clustered data
+  // layers above, for the "add a saved location" flow (see SavedPointEditor.tsx). null when
+  // not in that flow.
+  pinDraft: { lat: number; lng: number } | null;
+  onPinDragEnd: (lat: number, lng: number) => void;
 }
 
-export function Map({ flavor, locale, popupsT, markerLabelsT, onCameraClick, onViewHistory }: MapProps) {
+export function Map({
+  flavor,
+  locale,
+  popupsT,
+  markerLabelsT,
+  onCameraClick,
+  onViewHistory,
+  pinDraft,
+  onPinDragEnd,
+}: MapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   // Gates the loading overlay — without this, a slow or interrupted tile fetch (confirmed:
   // reloading mid-fetch reliably reproduces it) leaves a half-drawn map on screen with no
   // indication it's still loading, which reads as broken rather than "in progress."
   const [tilesReady, setTilesReady] = useState(false);
   const [dataReady, setDataReady] = useState(false);
+  // Lets the separate pin-marker effect below reach the current map instance, which otherwise
+  // only exists as a local variable inside the big init effect. onPinDragEndRef exists so the
+  // marker's dragend listener (attached once, when the marker is created) always calls the
+  // latest callback rather than the one captured at creation time — app.tsx passes a fresh
+  // inline closure on every render, same as onCameraClick/onViewHistory elsewhere in this file.
+  const mapRef = useRef<maplibregl.Map | undefined>(undefined);
+  const pinMarkerRef = useRef<maplibregl.Marker | undefined>(undefined);
+  const onPinDragEndRef = useRef(onPinDragEnd);
+  onPinDragEndRef.current = onPinDragEnd;
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -608,6 +631,7 @@ export function Map({ flavor, locale, popupsT, markerLabelsT, onCameraClick, onV
         },
         maxBounds: MAX_PAN_BOUNDS,
       });
+      mapRef.current = map;
 
       // Explicit fitBounds() call (not the constructor's `bounds` option) — kept as the
       // proven-reliable pattern from earlier testing; the ResizeObserver gate above is what
@@ -679,6 +703,9 @@ export function Map({ flavor, locale, popupsT, markerLabelsT, onCameraClick, onV
     return () => {
       cancelled = true;
       resizeObserver.disconnect();
+      pinMarkerRef.current?.remove();
+      pinMarkerRef.current = undefined;
+      mapRef.current = undefined;
       map?.remove();
     };
   // Deliberately excludes onCameraClick/onViewHistory — both are fresh inline closures from
@@ -686,6 +713,43 @@ export function Map({ flavor, locale, popupsT, markerLabelsT, onCameraClick, onV
   // never actually changes, so depending on them would rebuild the whole map on every
   // unrelated app.tsx re-render.
   }, [flavor, locale, popupsT, markerLabelsT]);
+
+  // Separate from the init effect above — a pinDraft change (e.g. selecting a new address
+  // search result) shouldn't rebuild the whole map, just move (or create/remove) this one
+  // marker. Guards on mapRef.current existing since pinDraft could theoretically change before
+  // the map has finished its async ResizeObserver-gated construction.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    if (!pinDraft) {
+      pinMarkerRef.current?.remove();
+      pinMarkerRef.current = undefined;
+      return;
+    }
+
+    if (!pinMarkerRef.current) {
+      const marker = new maplibregl.Marker({ draggable: true, color: "#16a085" })
+        .setLngLat([pinDraft.lng, pinDraft.lat])
+        .addTo(map);
+      marker.on("dragend", () => {
+        const lngLat = marker.getLngLat();
+        onPinDragEndRef.current(lngLat.lat, lngLat.lng);
+      });
+      pinMarkerRef.current = marker;
+      map.flyTo({ center: [pinDraft.lng, pinDraft.lat], zoom: Math.max(map.getZoom(), 12) });
+      return;
+    }
+
+    // Only reposition/fly for an externally-driven change (a search result) — the dragend
+    // handler above already fed this exact position back into pinDraft, so re-flying on that
+    // echo would fight the user's own drag gesture.
+    const current = pinMarkerRef.current.getLngLat();
+    if (Math.abs(current.lat - pinDraft.lat) > 1e-9 || Math.abs(current.lng - pinDraft.lng) > 1e-9) {
+      pinMarkerRef.current.setLngLat([pinDraft.lng, pinDraft.lat]);
+      map.flyTo({ center: [pinDraft.lng, pinDraft.lat], zoom: Math.max(map.getZoom(), 14) });
+    }
+  }, [pinDraft]);
 
   return (
     <div class="map-container">

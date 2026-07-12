@@ -1,6 +1,8 @@
 import { useEffect, useState } from "preact/hooks";
 import { BEARER_TOKEN_CHANGED_EVENT, getAccountStatus, startCheckout, startPortalSession } from "../lib/api";
 import type { AccountStatus, Plan } from "../lib/api";
+import { SavedPointsSection } from "./SavedPointsSection";
+import type { SavedPointsSectionT } from "./SavedPointsSection";
 
 type LoadState =
   | { status: "loading" }
@@ -27,7 +29,10 @@ interface AccountPanelProps {
       manageButton: string;
       error: string;
     };
+    savedPoints: SavedPointsSectionT;
   };
+  savedPointsRefreshKey: number;
+  onAddSavedPoint: () => void;
 }
 
 type AccountKey = keyof AccountPanelProps["t"]["account"];
@@ -37,7 +42,7 @@ const PLAN_LABEL_KEYS = {
   yearly: { price: "planYearly", unit: "planYearlyUnit" },
 } as const satisfies Record<Plan, { price: AccountKey; unit: AccountKey }>;
 
-export function AccountPanel({ t }: AccountPanelProps) {
+export function AccountPanel({ t, savedPointsRefreshKey, onAddSavedPoint }: AccountPanelProps) {
   const [state, setState] = useState<LoadState>({ status: "loading" });
   const [busy, setBusy] = useState(false);
 
@@ -134,6 +139,14 @@ export function AccountPanel({ t }: AccountPanelProps) {
       )}
 
       {state.status === "lifetime" && <p>{t.account.lifetimeBody}</p>}
+
+      {(state.status === "active" || state.status === "lifetime") && (
+        <SavedPointsSection
+          t={t.savedPoints}
+          refreshKey={savedPointsRefreshKey}
+          onAddSavedPoint={onAddSavedPoint}
+        />
+      )}
     </>
   );
 }

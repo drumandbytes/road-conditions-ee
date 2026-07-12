@@ -3,12 +3,18 @@ import { Map } from "./components/Map";
 import { InfoPanel } from "./components/InfoPanel";
 import { CameraModal } from "./components/CameraModal";
 import { WeatherHistoryModal } from "./components/WeatherHistoryModal";
+import { SavedPointEditor } from "./components/SavedPointEditor";
 import { ThemeToggle } from "./components/ThemeToggle";
 import type { Locale } from "./components/InfoPanel";
 import type { Theme } from "./components/ThemeToggle";
 import { completeCheckoutSession, setBearerToken } from "./lib/api";
 import et from "./i18n/et.json";
 import en from "./i18n/en.json";
+
+// Default starting pin position for the "add a saved location" flow, before the user has
+// searched or dragged — Tallinn city center, the single most likely starting point for most
+// users of an Estonia-focused app. Just a starting point, not a meaningful default location.
+const DEFAULT_PIN = { lat: 59.437, lng: 24.7536 };
 
 const TRANSLATIONS: Record<Locale, typeof et> = { et, en };
 const LOCALE_STORAGE_KEY = "road-conditions-locale";
@@ -29,6 +35,12 @@ export function App() {
   const [selectedCamera, setSelectedCamera] = useState<{ id: string; name: string } | null>(null);
   const [selectedWeatherHistoryStation, setSelectedWeatherHistoryStation] = useState<string | null>(null);
   const [theme, setTheme] = useState<Theme>(getInitialTheme);
+  const [infoOpen, setInfoOpen] = useState(false);
+  const [pinDraft, setPinDraft] = useState<{ lat: number; lng: number } | null>(null);
+  // Bumped after a saved point is created — AccountPanel's saved-points list re-fetches
+  // whenever this changes (see SavedPointsSection's effect deps), simpler than threading the
+  // new point itself back up through several layers of props.
+  const [savedPointsRefreshKey, setSavedPointsRefreshKey] = useState(0);
   const [systemPrefersDark, setSystemPrefersDark] = useState(
     () => window.matchMedia("(prefers-color-scheme: dark)").matches,
   );
@@ -117,8 +129,34 @@ export function App() {
         markerLabelsT={markerLabelsT}
         onCameraClick={(id, name) => setSelectedCamera({ id, name })}
         onViewHistory={(stationName) => setSelectedWeatherHistoryStation(stationName)}
+        pinDraft={pinDraft}
+        onPinDragEnd={(lat, lng) => setPinDraft({ lat, lng })}
       />
-      <InfoPanel t={t} locale={locale} onLocaleChange={setLocale} />
+      <InfoPanel
+        t={t}
+        locale={locale}
+        onLocaleChange={setLocale}
+        open={infoOpen}
+        onOpenChange={setInfoOpen}
+        savedPointsRefreshKey={savedPointsRefreshKey}
+        onAddSavedPoint={() => {
+          setInfoOpen(false);
+          setPinDraft(DEFAULT_PIN);
+        }}
+      />
+      {pinDraft && (
+        <SavedPointEditor
+          t={t.savedPoints}
+          pin={pinDraft}
+          onPinMove={(lat, lng) => setPinDraft({ lat, lng })}
+          onClose={() => setPinDraft(null)}
+          onSaved={() => {
+            setPinDraft(null);
+            setSavedPointsRefreshKey((k) => k + 1);
+            setInfoOpen(true);
+          }}
+        />
+      )}
       {selectedCamera && (
         <CameraModal
           cameraId={selectedCamera.id}

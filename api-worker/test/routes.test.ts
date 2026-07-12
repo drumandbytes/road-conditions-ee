@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { handleWeatherStations } from "../src/routes/weather";
 import { handleCameraImage, handleCameras } from "../src/routes/cameras";
+import { handleGeocode } from "../src/routes/geocode";
 import { handleHazards } from "../src/routes/hazards";
 import { handlePushSubscription } from "../src/routes/push-subscription";
 import { handleRestrictions } from "../src/routes/restrictions";
@@ -465,6 +466,43 @@ describe("handleStripeWebhook", () => {
       DB: fakeDb([]),
     });
     expect(res.status).toBe(400);
+  });
+});
+
+describe("handleGeocode", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("rejects a too-short query without calling Nominatim", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const res = await handleGeocode(new Request("https://example.com/api/geocode?q=ab"));
+    expect(res.status).toBe(400);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("proxies to Nominatim, scoped to Estonia, and maps to label/lat/lng", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify([{ display_name: "Narva mnt 5, Tallinn, Eesti", lat: "59.437", lon: "24.758" }]),
+        { status: 200 },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await handleGeocode(new Request("https://example.com/api/geocode?q=Narva+mnt+5"));
+    const body = await res.json();
+
+    expect(body).toEqual([{ label: "Narva mnt 5, Tallinn, Eesti", lat: 59.437, lng: 24.758 }]);
+    const [url] = fetchMock.mock.calls[0];
+    expect(String(url)).toContain("countrycodes=ee");
+  });
+
+  it("returns 502 when Nominatim itself fails", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("", { status: 500 })));
+    const res = await handleGeocode(new Request("https://example.com/api/geocode?q=Narva+mnt"));
+    expect(res.status).toBe(502);
   });
 });
 

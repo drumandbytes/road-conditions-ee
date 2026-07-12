@@ -744,3 +744,243 @@ body,
   font-size: 0.8rem;
   color: var(--color-text-secondary);
 }
+
+.account-button-secondary {
+  background: var(--color-bg-subtle);
+  color: var(--color-text);
+}
+
+.account-button-secondary:hover:not(:disabled) {
+  background: var(--color-border);
+}
+
+.saved-point-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.saved-point-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  background: var(--color-bg-card);
+  border-radius: var(--radius-md);
+  padding: 0.6rem 0.5rem 0.6rem 0.85rem;
+}
+
+.saved-point-label {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.saved-point-radius {
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--color-text-secondary);
+}
+
+.saved-point-delete {
+  border: none;
+  background: none;
+  color: var(--color-text-secondary);
+  font-size: 1.3rem;
+  line-height: 1;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.saved-point-delete:hover {
+  background: var(--color-border);
+  color: var(--color-danger);
+}
+
+/* The "add a saved location" flow — deliberately NOT a full-screen dark-scrim overlay like
+   .info-overlay, since the whole point is to keep the map visible and draggable underneath
+   while placing the pin. */
+.pin-editor-search-bar {
+  position: fixed;
+  top: 1rem;
+  left: 1rem;
+  right: 1rem;
+  z-index: 15;
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.pin-editor-search-input {
+  flex: 1;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  color: var(--color-text);
+  padding: 0.65rem 0.85rem;
+  font-size: 0.9rem;
+  box-shadow: var(--shadow-card);
+}
+
+.pin-editor-close {
+  flex-shrink: 0;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  border: none;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: 1.2rem;
+  box-shadow: var(--shadow-card);
+  cursor: pointer;
+}
+
+.pin-editor-results {
+  position: fixed;
+  top: 4rem;
+  left: 1rem;
+  right: 1rem;
+  z-index: 15;
+  background: var(--color-bg);
+  color: var(--color-text);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+  max-height: 40vh;
+  overflow-y: auto;
+}
+
+.pin-editor-results-status {
+  padding: 0.65rem 0.85rem;
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+}
+
+.pin-editor-result-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: none;
+  color: var(--color-text);
+  padding: 0.65rem 0.85rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.pin-editor-result-item:last-child {
+  border-bottom: none;
+}
+
+.pin-editor-result-item:hover {
+  background: var(--color-bg-subtle);
+}
+
+.pin-editor-sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 15;
+  max-height: 85vh;
+  overflow-y: auto;
+  background: var(--color-bg);
+  color: var(--color-text);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  padding: 1.25rem 1.5rem 1.5rem;
+  box-shadow: var(--shadow-panel);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.pin-editor-sheet h2 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.pin-editor-instructions {
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+  line-height: 1.4;
+  margin: 0;
+}
+
+.pin-editor-actions {
+  display: flex;
+  gap: 0.6rem;
+}
+
+.pin-editor-actions .account-button {
+  flex: 1;
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.form-field-label {
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.form-field input[type="text"] {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-card);
+  color: var(--color-text);
+  padding: 0.6rem 0.75rem;
+  font-size: 0.9rem;
+}
+
+.form-field input[type="range"] {
+  width: 100%;
+  accent-color: var(--color-accent);
+}
+
+.category-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-height: 30vh;
+  overflow-y: auto;
+}
+
+.category-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  cursor: pointer;
+}
+
+.category-item input[type="checkbox"] {
+  margin-top: 0.2rem;
+  accent-color: var(--color-accent);
+  flex-shrink: 0;
+}
+
+.category-item-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.category-item-label {
+  font-size: 0.88rem;
+  font-weight: 500;
+}
+
+.category-item-example {
+  font-size: 0.78rem;
+  color: var(--color-text-secondary);
+}

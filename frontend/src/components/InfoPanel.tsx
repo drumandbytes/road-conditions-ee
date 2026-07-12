@@ -1,5 +1,6 @@
 import { useState } from "preact/hooks";
 import { AccountPanel } from "./AccountPanel";
+import type { SavedPointsSectionT } from "./SavedPointsSection";
 
 const COFFEE_LINK = "https://buymeacoffee.com/justmaris";
 
@@ -56,25 +57,42 @@ interface InfoPanelProps {
       manageButton: string;
       error: string;
     };
+    savedPoints: SavedPointsSectionT;
   };
   locale: Locale;
   onLocaleChange: (locale: Locale) => void;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  savedPointsRefreshKey: number;
+  onAddSavedPoint: () => void;
 }
 
-export function InfoPanel({ t, locale, onLocaleChange }: InfoPanelProps) {
-  const [open, setOpen] = useState(false);
+export function InfoPanel({
+  t,
+  locale,
+  onLocaleChange,
+  open,
+  onOpenChange,
+  savedPointsRefreshKey,
+  onAddSavedPoint,
+}: InfoPanelProps) {
   const [tab, setTab] = useState<Tab>("info");
   const [showAbout, setShowAbout] = useState(false);
 
   return (
     <>
-      <button type="button" class="info-button" onClick={() => setOpen(true)} aria-label={t.info.openButton}>
+      <button type="button" class="info-button" onClick={() => onOpenChange(true)} aria-label={t.info.openButton}>
         ⓘ
       </button>
       {open && (
-        <div class="info-overlay" onClick={() => setOpen(false)}>
+        <div class="info-overlay" onClick={() => onOpenChange(false)}>
           <div class="info-panel" onClick={(e) => e.stopPropagation()}>
-            <button type="button" class="info-panel-close" onClick={() => setOpen(false)} aria-label={t.info.close}>
+            <button
+              type="button"
+              class="info-panel-close"
+              onClick={() => onOpenChange(false)}
+              aria-label={t.info.close}
+            >
               ×
             </button>
 
@@ -187,7 +205,13 @@ export function InfoPanel({ t, locale, onLocaleChange }: InfoPanelProps) {
                   </>
                 )}
 
-                {tab === "account" && <AccountPanel t={t} />}
+                {tab === "account" && (
+                  <AccountPanel
+                    t={t}
+                    savedPointsRefreshKey={savedPointsRefreshKey}
+                    onAddSavedPoint={onAddSavedPoint}
+                  />
+                )}
 
                 <button type="button" class="about-link" onClick={() => setShowAbout(true)}>
                   {t.info.aboutLink}
