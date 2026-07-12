@@ -2,8 +2,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { handleWeatherStations } from "../src/routes/weather";
 import { handleCameraImage, handleCameras } from "../src/routes/cameras";
 import { handleHazards } from "../src/routes/hazards";
+import { handlePushSubscription } from "../src/routes/push-subscription";
 import { handleRestrictions } from "../src/routes/restrictions";
 import { handleWeatherStationHistory } from "../src/routes/weather-history";
+import { handleListSavedPoints, handleSubscribe, handleUnsubscribe } from "../src/routes/subscribe";
 import { handleCheckout, handleCheckoutSession, handlePortal } from "../src/routes/checkout";
 import { handleStripeWebhook } from "../src/routes/stripe-webhook";
 import { corsHeaders, handlePreflight, isAllowedOrigin } from "../src/cors";
@@ -463,5 +465,145 @@ describe("handleStripeWebhook", () => {
       DB: fakeDb([]),
     });
     expect(res.status).toBe(400);
+  });
+});
+
+const PAID_USER: UserRow = {
+  id: "u1",
+  email: "a@b.com",
+  stripe_customer_id: "cus_1",
+  subscription_status: "active",
+  bearer_token: "tok",
+};
+
+describe("handleListSavedPoints", () => {
+  it("requires a paid user", async () => {
+    const res = await handleListSavedPoints(fakeDb([]), null);
+    expect(res.status).toBe(402);
+  });
+
+  it("returns saved points with camelCase fields and parsed eventTypes", async () => {
+    const db = fakeDb([
+      { id: 1, user_id: "u1", label: "Home", lat: 59.4, lng: 24.7, radius_km: 5, event_types: '["slippery","accident"]' },
+      { id: 2, user_id: "u1", label: "Work", lat: 58.4, lng: 26.7, radius_km: 10, event_types: null },
+    ]);
+    const res = await handleListSavedPoints(db, PAID_USER);
+    const body = await res.json();
+    expect(body).toEqual([
+      { id: 1, label: "Home", lat: 59.4, lng: 24.7, radiusKm: 5, eventTypes: ["slippery", "accident"] },
+      { id: 2, label: "Work", lat: 58.4, lng: 26.7, radiusKm: 10, eventTypes: null },
+    ]);
+  });
+});
+
+describe("handleSubscribe", () => {
+  function subscribeRequest(body: unknown): Request {
+    return new Request("https://example.com/api/subscribe", { method: "POST", body: JSON.stringify(body) });
+  }
+
+  it("requires a paid user", async () => {
+    const res = await handleSubscribe(subscribeRequest({}), fakeDb([]), null);
+    expect(res.status).toBe(402);
+  });
+
+  it("rejects a coordinate well outside Estonia", async () => {
+    const res = await handleSubscribe(
+      subscribeRequest({ label: "Home", lat: 40.7, lng: -74, radiusKm: 5, eventTypes: null }),
+      fakeDb([]),
+      PAID_USER,
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects an empty label", async () => {
+    const res = await handleSubscribe(
+      subscribeRequest({ label: "  ", lat: 59.4, lng: 24.7, radiusKm: 5, eventTypes: null }),
+      fakeDb([]),
+      PAID_USER,
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("creates a saved point and returns it with the caller's user id bound, not a client-supplied one", async () => {
+    const returningRow = { id: 1, user_id: "u1", label: "Home", lat: 59.4, lng: 24.7, radius_km: 5, event_types: '["slippery"]' };
+    const { db, calls } = fakeDbCapturing(returningRow);
+
+    const res = await handleSubscribe(
+      subscribeRequest({ label: "Home", lat: 59.4, lng: 24.7, radiusKm: 5, eventTypes: ["slippery"], userId: "someone-else" }),
+      db,
+      PAID_USER,
+    );
+
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body).toEqual({ id: 1, label: "Home", lat: 59.4, lng: 24.7, radiusKm: 5, eventTypes: ["slippery"] });
+    // First bound param is user_id — must be the authenticated user's id, ignoring any
+    // userId the client tried to slip into the body.
+    expect(calls[0][0]).toBe("u1");
+  });
+});
+
+describe("handleUnsubscribe", () => {
+  function fakeDbWithChanges(changes: number): D1Database {
+    return {
+      prepare: () => ({
+        bind: () => ({ run: async () => ({ meta: { changes } }) }),
+      }),
+    } as unknown as D1Database;
+  }
+
+  it("requires authentication", async () => {
+    const res = await handleUnsubscribe("1", fakeDb([]), null);
+    expect(res.status).toBe(401);
+  });
+
+  it("rejects a non-numeric id", async () => {
+    const res = await handleUnsubscribe("not-a-number", fakeDb([]), PAID_USER);
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 404 when nothing matched (wrong owner or missing row)", async () => {
+    const res = await handleUnsubscribe("1", fakeDbWithChanges(0), PAID_USER);
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 204 when the row was deleted", async () => {
+    const res = await handleUnsubscribe("1", fakeDbWithChanges(1), PAID_USER);
+    expect(res.status).toBe(204);
+  });
+});
+
+describe("handlePushSubscription", () => {
+  function pushSubRequest(body: unknown): Request {
+    return new Request("https://example.com/api/push-subscription", { method: "POST", body: JSON.stringify(body) });
+  }
+
+  it("requires a paid user", async () => {
+    const res = await handlePushSubscription(pushSubRequest({}), fakeDb([]), null);
+    expect(res.status).toBe(402);
+  });
+
+  it("rejects a malformed subscription", async () => {
+    const res = await handlePushSubscription(
+      pushSubRequest({ endpoint: "not-a-url", keys: { p256dh: "x", auth: "y" } }),
+      fakeDb([]),
+      PAID_USER,
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("upserts a valid subscription and binds the authenticated user's id", async () => {
+    const returningRow = { id: 1, user_id: "u1", endpoint: "https://push.example.com/abc", p256dh: "x", auth: "y", failure_count: 0 };
+    const { db, calls } = fakeDbCapturing(returningRow);
+
+    const res = await handlePushSubscription(
+      pushSubRequest({ endpoint: "https://push.example.com/abc", keys: { p256dh: "x", auth: "y" } }),
+      db,
+      PAID_USER,
+    );
+
+    expect(res.status).toBe(204);
+    expect(calls[0][0]).toBe("u1");
+    expect(calls[0][1]).toBe("https://push.example.com/abc");
   });
 });

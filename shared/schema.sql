@@ -129,7 +129,11 @@ CREATE TABLE restrictions (
   date_to TEXT,
   lat REAL NOT NULL,
   lng REAL NOT NULL,
-  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  notified_at TEXT                -- set once push-matching has run for this restriction,
+                                   -- mirroring hazards.notified_at — restrictions participate
+                                   -- in saved-point alert matching too (see ingest-worker's
+                                   -- push matching in index.ts)
 );
 -- No index on date_to — despite the name, no query anywhere in this codebase actually filters
 -- on it (the active-window filtering happens upstream, in the where-clause sent to ArcGIS, not

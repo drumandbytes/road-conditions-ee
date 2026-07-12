@@ -154,6 +154,84 @@ export interface UserRow {
   bearer_token: string | null;
 }
 
+export interface SavedPointRow {
+  id: number;
+  user_id: string;
+  label: string;
+  lat: number;
+  lng: number;
+  radius_km: number;
+  event_types: string | null; // JSON array string, or null = all types
+}
+
+export async function getSavedPointsByUser(db: D1Database, userId: string): Promise<SavedPointRow[]> {
+  const { results } = await db
+    .prepare("SELECT * FROM saved_points WHERE user_id = ?")
+    .bind(userId)
+    .all<SavedPointRow>();
+  return results;
+}
+
+export async function createSavedPoint(
+  db: D1Database,
+  params: { userId: string; label: string; lat: number; lng: number; radiusKm: number; eventTypes: string[] | null },
+): Promise<SavedPointRow> {
+  const row = await db
+    .prepare(
+      `INSERT INTO saved_points (user_id, label, lat, lng, radius_km, event_types)
+       VALUES (?, ?, ?, ?, ?, ?)
+       RETURNING *`,
+    )
+    .bind(
+      params.userId,
+      params.label,
+      params.lat,
+      params.lng,
+      params.radiusKm,
+      params.eventTypes ? JSON.stringify(params.eventTypes) : null,
+    )
+    .first<SavedPointRow>();
+  if (!row) throw new Error("createSavedPoint: RETURNING produced no row");
+  return row;
+}
+
+/** True only if a row belonging to this user was actually deleted — lets the route respond
+ *  404 for both "no such id" and "someone else's point" without distinguishing the two. */
+export async function deleteSavedPoint(db: D1Database, id: number, userId: string): Promise<boolean> {
+  const result = await db.prepare("DELETE FROM saved_points WHERE id = ? AND user_id = ?").bind(id, userId).run();
+  return (result.meta?.changes ?? 0) > 0;
+}
+
+export interface PushSubscriptionRow {
+  id: number;
+  user_id: string;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  failure_count: number;
+}
+
+/** Upserts by endpoint — a browser can resubscribe with the same endpoint (refreshing keys)
+ *  or a new one (e.g. after clearing site data). failure_count resets to 0 on any successful
+ *  (re)subscribe, since a fresh subscription hasn't failed yet. */
+export async function upsertPushSubscription(
+  db: D1Database,
+  params: { userId: string; endpoint: string; p256dh: string; auth: string },
+): Promise<PushSubscriptionRow> {
+  const row = await db
+    .prepare(
+      `INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(endpoint) DO UPDATE SET
+         user_id = excluded.user_id, p256dh = excluded.p256dh, auth = excluded.auth, failure_count = 0
+       RETURNING *`,
+    )
+    .bind(params.userId, params.endpoint, params.p256dh, params.auth)
+    .first<PushSubscriptionRow>();
+  if (!row) throw new Error("upsertPushSubscription: RETURNING produced no row");
+  return row;
+}
+
 export async function getUserByBearerToken(db: D1Database, token: string): Promise<UserRow | null> {
   const row = await db
     .prepare("SELECT * FROM users WHERE bearer_token = ?")

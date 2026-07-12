@@ -3,9 +3,10 @@ import { corsHeaders, handlePreflight, isAllowedOrigin } from "./src/cors";
 import { handleCameraImage, handleCameras } from "./src/routes/cameras";
 import { handleCheckout, handleCheckoutSession, handlePortal } from "./src/routes/checkout";
 import { handleHazards } from "./src/routes/hazards";
+import { handlePushSubscription } from "./src/routes/push-subscription";
 import { handleRestrictions } from "./src/routes/restrictions";
 import { handleStripeWebhook } from "./src/routes/stripe-webhook";
-import { handleSubscribe, handleUnsubscribe } from "./src/routes/subscribe";
+import { handleListSavedPoints, handleSubscribe, handleUnsubscribe } from "./src/routes/subscribe";
 import { handleVms } from "./src/routes/vms";
 import { handleWeatherStations } from "./src/routes/weather";
 import { handleWeatherStationHistory } from "./src/routes/weather-history";
@@ -66,6 +67,10 @@ async function route(request: Request, env: Env): Promise<Response> {
     const user = await authenticatePaidUser(env.DB, request);
     return handleVms(env.DB, user);
   }
+  if (method === "GET" && pathname === "/api/subscribe") {
+    const user = await authenticatePaidUser(env.DB, request);
+    return handleListSavedPoints(env.DB, user);
+  }
   if (method === "POST" && pathname === "/api/subscribe") {
     const user = await authenticatePaidUser(env.DB, request);
     return handleSubscribe(request, env.DB, user);
@@ -74,6 +79,10 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (method === "DELETE" && unsubscribeMatch) {
     const user = await authenticatePaidUser(env.DB, request);
     return handleUnsubscribe(unsubscribeMatch[1], env.DB, user);
+  }
+  if (method === "POST" && pathname === "/api/push-subscription") {
+    const user = await authenticatePaidUser(env.DB, request);
+    return handlePushSubscription(request, env.DB, user);
   }
   if (method === "GET" && pathname === "/api/me") {
     const user = await authenticatePaidUser(env.DB, request);
