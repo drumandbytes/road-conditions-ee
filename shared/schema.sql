@@ -140,6 +140,20 @@ CREATE TABLE weather_station_history (
 );
 CREATE UNIQUE INDEX idx_weather_history_station_hour ON weather_station_history(station_name, recorded_at);
 
+-- Also from the ArcGIS service (tram/detours) — alternate-route descriptions tied to a
+-- specific restriction. No lat/lng: a detour describes the same location as the restriction
+-- it's tied to, so api-worker joins this onto the restriction row by restriction_id rather
+-- than rendering a second, near-duplicate marker on the map.
+CREATE TABLE detours (
+  id INTEGER PRIMARY KEY,
+  restriction_id INTEGER,
+  description TEXT,
+  date_from TEXT,
+  date_to TEXT,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX idx_detours_restriction_id ON detours(restriction_id);
+
 CREATE TABLE cameras (
   id TEXT PRIMARY KEY,           -- UUID, from the roadCameraLocations DATEX II feed —
                                   -- deliberately not the same ID scheme as weather_stations;

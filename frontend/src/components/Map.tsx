@@ -90,6 +90,7 @@ interface PopupsT {
   viewHistory: string;
   restrictionRoad: string;
   restrictionContractor: string;
+  restrictionDetour: string;
   restrictionCauseOther: string;
   restrictionCauseConstruction: string;
   restrictionCauseEvent: string;
@@ -283,12 +284,14 @@ function buildRestrictionPopupHtml(properties: Record<string, unknown>, locale: 
     ? `${escapeHtml(dateFrom)}${dateTo ? ` – ${escapeHtml(dateTo)}` : ` (${escapeHtml(t.ongoing)})`}`
     : null;
   const contractor = properties.contractorOrganization ? escapeHtml(String(properties.contractorOrganization)) : null;
+  const detour = properties.detourDescription ? escapeHtml(String(properties.detourDescription)) : null;
 
   return `
     <div class="map-popup-title"><span class="map-popup-status-dot" style="background:${effectColor}"></span>${roadName}</div>
     <div class="map-popup-status">${effectLabel}${causeLabel ? ` — ${causeLabel}` : ""}</div>
     ${extraInfo ? `<div class="map-popup-desc">${extraInfo}</div>` : ""}
     ${timeLine ? `<div class="map-popup-meta">${timeLine}</div>` : ""}
+    ${detour ? `<div class="map-popup-meta">${escapeHtml(t.restrictionDetour)}: ${detour}</div>` : ""}
     ${contractor ? `<div class="map-popup-meta">${escapeHtml(t.restrictionContractor)}: ${contractor}</div>` : ""}
   `;
 }

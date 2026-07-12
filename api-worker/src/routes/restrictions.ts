@@ -14,7 +14,10 @@ export async function handleRestrictions(db: D1Database): Promise<Response> {
         cause: r.cause,
         effect: r.effect,
         extraInfo: r.extra_info,
-        detourComment: r.detour_comment,
+        // detour_comment (from restrictions_traffic itself) is rarely populated in practice —
+        // confirmed only 6 of 386 active restrictions have it. detour_description (joined from
+        // the separate tram/detours service) is the real source for this; prefer it.
+        detourDescription: r.detour_description ?? r.detour_comment,
         contractorOrganization: r.contractor_organization,
         contractorContactPhone: r.contractor_contact_phone,
         trafficCtrlOrganization: r.traffic_ctrl_organization,

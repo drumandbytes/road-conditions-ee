@@ -204,3 +204,57 @@ export async function fetchRestrictions(): Promise<Restriction[]> {
   }
   return restrictions;
 }
+
+export interface Detour {
+  id: number;
+  restrictionId: number | null;
+  description: string | null;
+  dateFrom: string | null;
+  dateTo: string | null;
+}
+
+interface DetourAttributes {
+  objectid: number;
+  restriction_id: number | null;
+  description: string | null;
+  date_from: number | null;
+  date_to: number | null;
+}
+
+async function fetchDetoursPage(offset: number): Promise<ArcGisQueryResponse<DetourAttributes>> {
+  const params = new URLSearchParams({
+    f: "json",
+    outFields: "*",
+    // Same active-window filter as restrictions — this layer holds the same kind of
+    // multi-year archive (entries back to 2017), and detours only matter tied to a
+    // currently-active restriction anyway.
+    where: activeRestrictionsWhereClause(),
+    resultOffset: String(offset),
+    resultRecordCount: String(ARCGIS_PAGE_SIZE),
+  });
+  return fetchArcGisJson<DetourAttributes>(`${ARCGIS_BASE}/detours/MapServer/0/query?${params}`);
+}
+
+// No geometry parsed here — detours describe the same location as the restriction they're
+// tied to (restriction_id), so api-worker joins them onto the restriction row rather than
+// this becoming a second set of map markers at (near-)duplicate positions.
+export async function fetchDetours(): Promise<Detour[]> {
+  const detours: Detour[] = [];
+  let offset = 0;
+  for (;;) {
+    const page = await fetchDetoursPage(offset);
+    for (const f of page.features) {
+      const a = f.attributes;
+      detours.push({
+        id: a.objectid,
+        restrictionId: a.restriction_id,
+        description: a.description,
+        dateFrom: a.date_from ? new Date(a.date_from).toISOString() : null,
+        dateTo: a.date_to ? new Date(a.date_to).toISOString() : null,
+      });
+    }
+    if (!page.exceededTransferLimit || page.features.length < ARCGIS_PAGE_SIZE) break;
+    offset += ARCGIS_PAGE_SIZE;
+  }
+  return detours;
+}

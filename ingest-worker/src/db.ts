@@ -1,5 +1,5 @@
 import type { CameraMeta, HazardRecord } from "./tarktee";
-import type { Restriction, WeatherReading } from "./arcgis";
+import type { Detour, Restriction, WeatherReading } from "./arcgis";
 
 // db.batch([]) throws "D1_ERROR: No SQL statements detected" on an empty array — confirmed
 // in production (broke the cameras upsert when every entry from the old, broken metadata
@@ -125,6 +125,23 @@ export async function upsertRestrictions(db: D1Database, restrictions: Restricti
   // same reason as weather_stations above — confirmed in production this table's ~380 active
   // rows overflow D1's per-statement variable limit with the NOT IN approach.
   await db.prepare(`DELETE FROM restrictions WHERE updated_at < datetime('now', '-1 hour')`).run();
+}
+
+export async function upsertDetours(db: D1Database, detours: Detour[]): Promise<void> {
+  const stmt = db.prepare(
+    `INSERT INTO detours (id, restriction_id, description, date_from, date_to, updated_at)
+     VALUES (?, ?, ?, ?, ?, datetime('now'))
+     ON CONFLICT(id) DO UPDATE SET
+       restriction_id = excluded.restriction_id, description = excluded.description,
+       date_from = excluded.date_from, date_to = excluded.date_to, updated_at = datetime('now')`,
+  );
+  await batchIfNonEmpty(
+    db,
+    detours.map((d) => stmt.bind(d.id, d.restrictionId, d.description, d.dateFrom, d.dateTo)),
+  );
+
+  // Same stale-row reasoning as restrictions above (timestamp-only, not id NOT IN).
+  await db.prepare(`DELETE FROM detours WHERE updated_at < datetime('now', '-1 hour')`).run();
 }
 
 // Cameras are keyed by UUID (from the roadCameraLocations feed) — see tarktee.ts for why

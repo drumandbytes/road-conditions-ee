@@ -65,12 +65,14 @@ describe("handleRestrictions", () => {
         contractor_organization: "AS TREV-2 Grupp", contractor_contact_phone: "53 359 067",
         traffic_ctrl_organization: null, traffic_ctrl_contact_phone: "53 407 504",
         date_from: "2017-09-03T21:00:00.000Z", date_to: null, lat: 58.6, lng: 24.5,
+        detour_description: "Ümbersõit on korraldatud Kose mnt kaudu.",
       },
     ]);
     const res = await handleRestrictions(db);
-    const body = (await res.json()) as { features: Array<{ properties: { roadName: string; cause: string } }> };
+    const body = (await res.json()) as { features: Array<{ properties: { roadName: string; cause: string; detourDescription: string } }> };
     expect(body.features[0].properties.roadName).toBe("Kõmsi - Mõisaküla - Salevere");
     expect(body.features[0].properties.cause).toBe("PAVING");
+    expect(body.features[0].properties.detourDescription).toBe("Ümbersõit on korraldatud Kose mnt kaudu.");
   });
 });
 

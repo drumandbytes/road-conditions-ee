@@ -43,6 +43,7 @@
     "viewHistory": "Vaata ajalugu",
     "restrictionRoad": "Tee",
     "restrictionContractor": "Töövõtja",
+    "restrictionDetour": "Ümbersõit",
     "restrictionCauseOther": "Muu",
     "restrictionCauseConstruction": "Ehitustööd",
     "restrictionCauseEvent": "Üritus",

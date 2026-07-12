@@ -1,8 +1,9 @@
 import { fetchAllHazards, fetchCamerasMetadata } from "./src/tarktee";
-import { fetchRestrictions, fetchWeatherReadings } from "./src/arcgis";
+import { fetchDetours, fetchRestrictions, fetchWeatherReadings } from "./src/arcgis";
 import {
   pruneWeatherHistory,
   upsertCameras,
+  upsertDetours,
   upsertHazardsAndGetChanged,
   upsertRestrictions,
   upsertWeatherHistory,
@@ -74,6 +75,11 @@ async function pollSlow(env: Env): Promise<void> {
   await runStep("restrictions", async () => {
     const restrictions = await fetchRestrictions();
     await upsertRestrictions(env.DB, restrictions);
+  });
+
+  await runStep("detours", async () => {
+    const detours = await fetchDetours();
+    await upsertDetours(env.DB, detours);
   });
 
   await runStep("cameras", async () => {

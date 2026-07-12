@@ -35,6 +35,7 @@ export interface RestrictionRow {
   date_to: string | null;
   lat: number;
   lng: number;
+  detour_description: string | null;
 }
 
 export interface CameraRow {
@@ -61,8 +62,18 @@ export async function getWeatherStations(db: D1Database): Promise<WeatherStation
   return results;
 }
 
+// Correlated subquery (not a JOIN) so a restriction with more than one detours row still
+// returns exactly one restriction row — detours are shown merged into the restriction's own
+// popup (see Map.tsx), not as separate markers, so there's nothing to do with a second match
+// beyond picking one.
 export async function getRestrictions(db: D1Database): Promise<RestrictionRow[]> {
-  const { results } = await db.prepare("SELECT * FROM restrictions").all<RestrictionRow>();
+  const { results } = await db
+    .prepare(
+      `SELECT r.*,
+              (SELECT description FROM detours WHERE restriction_id = r.id AND description IS NOT NULL ORDER BY id LIMIT 1) AS detour_description
+       FROM restrictions r`,
+    )
+    .all<RestrictionRow>();
   return results;
 }
 
