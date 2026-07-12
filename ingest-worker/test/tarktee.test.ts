@@ -1,7 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import weatherMetadataFixture from "./mocks/weather-metadata.json";
-import weatherStatusFixture from "./mocks/weather-status.json";
-import { fetchCamerasMetadata, fetchHazards, fetchWeatherStationsMetadata, fetchWeatherStationsStatus } from "../src/tarktee";
+import { fetchCamerasMetadata, fetchHazards } from "../src/tarktee";
 
 // Structure captured from a real Tark Tee response (see tarktee.ts's fetchCamerasMetadata
 // comment) — the "Lokuti"/"Nõva" entries, coordinates, and image URL format are real; this
@@ -80,39 +78,14 @@ describe("tarktee.ts", () => {
     vi.unstubAllGlobals();
   });
 
-  it("parses weather station metadata from GeoJSON", async () => {
-    const fetchMock = mockFetchOnceJson(weatherMetadataFixture);
-    vi.stubGlobal("fetch", fetchMock);
-
-    const stations = await fetchWeatherStationsMetadata();
-
-    expect(stations).toEqual([
-      { id: 315, name: "Uku", lat: 59.39007, lng: 26.01581 },
-      { id: 313, name: "Veneküla", lat: 59.1, lng: 24.7 },
-    ]);
-  });
-
   it("always sends Accept-Encoding: identity (regression test for the Phase 0 chunked-encoding fix)", async () => {
-    const fetchMock = mockFetchOnceJson(weatherMetadataFixture);
+    const fetchMock = mockFetchOnceText(cameraLocationsXmlFixture);
     vi.stubGlobal("fetch", fetchMock);
 
-    await fetchWeatherStationsMetadata();
+    await fetchCamerasMetadata();
 
     const [, options] = fetchMock.mock.calls[0];
     expect((options.headers as Record<string, string>)["Accept-Encoding"]).toBe("identity");
-  });
-
-  it("derives green/amber/red status from qualityPercentage and successful flag", async () => {
-    const fetchMock = mockFetchOnceJson(weatherStatusFixture);
-    vi.stubGlobal("fetch", fetchMock);
-
-    const statuses = await fetchWeatherStationsStatus();
-
-    expect(statuses).toEqual([
-      { stationId: 315, status: "green", updatedAt: "2026-07-05T10:23:01.853547" },
-      { stationId: 313, status: "amber", updatedAt: "2026-07-05T10:13:58.949647" },
-      { stationId: 999, status: "red", updatedAt: "2026-07-05T10:16:14.456884" },
-    ]);
   });
 
   // Regression test: cameras used to come from a JSON "metadata" endpoint whose geometry

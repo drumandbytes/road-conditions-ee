@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { handleWeatherStations } from "../src/routes/weather";
 import { handleCameraImage, handleCameras } from "../src/routes/cameras";
 import { handleHazards } from "../src/routes/hazards";
+import { handleRestrictions } from "../src/routes/restrictions";
 import { handleCheckout, handleCheckoutSession, handlePortal } from "../src/routes/checkout";
 import { handleStripeWebhook } from "../src/routes/stripe-webhook";
 import { corsHeaders, handlePreflight, isAllowedOrigin } from "../src/cors";
@@ -26,8 +27,15 @@ function fakeDb(rows: unknown[]): D1Database {
 }
 
 describe("handleWeatherStations", () => {
-  it("builds a GeoJSON FeatureCollection from station rows", async () => {
-    const db = fakeDb([{ id: 1, name: "Uku", lat: 59.39, lng: 26.01, status: "green", last_updated_at: "t" }]);
+  it("builds a GeoJSON FeatureCollection with real readings from station rows", async () => {
+    const db = fakeDb([
+      {
+        id: 1, name: "Uku", lat: 59.39, lng: 26.01,
+        road_status: "DRY", road_status_aggregate: "OK", road_temp: 21.7, air_temp: 17.6,
+        precipitation_type: "NO_PRECIPITATION", precipitation_intensity: 0, wind_dir: 347, wind_speed: 0.6,
+        air_humidity: 95, visibility: 2000, grip_factor: 0.9, measurement_time: "m", last_updated_at: "t",
+      },
+    ]);
     const res = await handleWeatherStations(db);
     const body = await res.json();
     expect(body).toEqual({
@@ -35,11 +43,33 @@ describe("handleWeatherStations", () => {
       features: [
         {
           type: "Feature",
-          properties: { id: 1, name: "Uku", status: "green", lastUpdatedAt: "t" },
+          properties: {
+            id: 1, name: "Uku", roadStatus: "DRY", roadStatusAggregate: "OK", roadTemp: 21.7, airTemp: 17.6,
+            precipitationType: "NO_PRECIPITATION", precipitationIntensity: 0, windDir: 347, windSpeed: 0.6,
+            airHumidity: 95, visibility: 2000, gripFactor: 0.9, measurementTime: "m", lastUpdatedAt: "t",
+          },
           geometry: { type: "Point", coordinates: [26.01, 59.39] },
         },
       ],
     });
+  });
+});
+
+describe("handleRestrictions", () => {
+  it("builds a GeoJSON FeatureCollection from restriction rows", async () => {
+    const db = fakeDb([
+      {
+        id: 1607, road_nr: 16187, road_name: "Kõmsi - Mõisaküla - Salevere", road_type: "SECONDARY_ROAD",
+        cause: "PAVING", effect: "SPEED_LIMITED", extra_info: "info", detour_comment: null,
+        contractor_organization: "AS TREV-2 Grupp", contractor_contact_phone: "53 359 067",
+        traffic_ctrl_organization: null, traffic_ctrl_contact_phone: "53 407 504",
+        date_from: "2017-09-03T21:00:00.000Z", date_to: null, lat: 58.6, lng: 24.5,
+      },
+    ]);
+    const res = await handleRestrictions(db);
+    const body = (await res.json()) as { features: Array<{ properties: { roadName: string; cause: string } }> };
+    expect(body.features[0].properties.roadName).toBe("Kõmsi - Mõisaküla - Salevere");
+    expect(body.features[0].properties.cause).toBe("PAVING");
   });
 });
 

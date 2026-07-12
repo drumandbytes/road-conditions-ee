@@ -1,0 +1,24 @@
+{
+  "exceededTransferLimit": false,
+  "features": [
+    {
+      "attributes": {
+        "objectid": 1607,
+        "road_nr": 16187,
+        "road_name": "Kõmsi - Mõisaküla - Salevere",
+        "road_type": "SECONDARY_ROAD",
+        "cause": "PAVING",
+        "effect": "SPEED_LIMITED",
+        "extra_info": "Üks sõidurada on suletud, liiklust korraldatakse fooridega.",
+        "detour_comment": null,
+        "contractor_organization": "AS TREV-2 Grupp",
+        "contractor_contact_phone": "53 359 067",
+        "traffic_ctrl_organization": null,
+        "traffic_ctrl_contact_phone": "53 407 504",
+        "date_from": 1504472400000,
+        "date_to": 1505422800000
+      },
+      "geometry": { "x": 475126.8844999969, "y": 6502576.812100001 }
+    }
+  ]
+}

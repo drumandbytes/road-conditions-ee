@@ -1,5 +1,0 @@
-[
-  { "id": 2067148, "stationId": 315, "createdAt": "2026-07-05T10:23:01.853547", "status": "SUCCESS", "statusMsg": null, "qualityPercentage": 98.04, "sensors": [], "successful": true },
-  { "id": 2067093, "stationId": 313, "createdAt": "2026-07-05T10:13:58.949647", "status": "SUCCESS", "statusMsg": null, "qualityPercentage": 62.5, "sensors": [], "successful": true },
-  { "id": 2067104, "stationId": 999, "createdAt": "2026-07-05T10:16:14.456884", "status": "FAILED", "statusMsg": "timeout", "qualityPercentage": 0, "sensors": [], "successful": false }
-]

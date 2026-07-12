@@ -12,55 +12,12 @@ const TARKTEE_HEADERS = {
 
 const BASE = "https://tarktee.ee/api/v1";
 
-export interface WeatherStationMeta {
-  id: number;
-  name: string;
-  lat: number;
-  lng: number;
-}
-
-export interface WeatherStationStatus {
-  stationId: number;
-  status: "green" | "amber" | "red";
-  updatedAt: string;
-}
-
 export interface CameraMeta {
-  id: string; // UUID — see fetchCamerasMetadata for why this differs from WeatherStationMeta's numeric id
+  id: string; // UUID — see fetchCamerasMetadata for why this differs from weather_stations' numeric id
   name: string;
   lat: number;
   lng: number;
   imageUrl: string;
-}
-
-interface GeoJsonFeature {
-  type: "Feature";
-  properties: { id: number; name: string; [key: string]: unknown };
-  geometry: { type: "Point"; coordinates: [number, number, number?] } | null;
-  id: string;
-}
-
-interface GeoJsonFeatureCollection {
-  type: "FeatureCollection";
-  features: GeoJsonFeature[];
-}
-
-interface WeatherStatusEntry {
-  id: number;
-  stationId: number;
-  createdAt: string;
-  status: "SUCCESS" | "FAILED" | string;
-  statusMsg: string | null;
-  qualityPercentage: number;
-  successful: boolean;
-}
-
-async function fetchJson<T>(url: string): Promise<T> {
-  const res = await fetch(url, { headers: TARKTEE_HEADERS });
-  if (!res.ok) {
-    throw new Error(`Tark Tee request failed: ${url} -> ${res.status} ${res.statusText}`);
-  }
-  return res.json() as Promise<T>;
 }
 
 async function fetchText(url: string, extraHeaders?: Record<string, string>): Promise<string> {
@@ -69,40 +26,6 @@ async function fetchText(url: string, extraHeaders?: Record<string, string>): Pr
     throw new Error(`Tark Tee request failed: ${url} -> ${res.status} ${res.statusText}`);
   }
   return res.text();
-}
-
-export async function fetchWeatherStationsMetadata(): Promise<WeatherStationMeta[]> {
-  const data = await fetchJson<GeoJsonFeatureCollection>(
-    `${BASE}/import/public/tap/stations/weather-data/metadata`,
-  );
-  return data.features
-    .filter((f) => f.geometry !== null)
-    .map((f) => ({
-      id: f.properties.id,
-      name: f.properties.name,
-      lat: f.geometry!.coordinates[1],
-      lng: f.geometry!.coordinates[0],
-    }));
-}
-
-// Confirmed in Phase 0 (both via Python and a real Cloudflare Worker): this endpoint only
-// returns batch/quality status per station, never raw sensor values (temp/wind/etc).
-// "sensors" is always an empty array in practice. Status is derived from qualityPercentage.
-export async function fetchWeatherStationsStatus(): Promise<WeatherStationStatus[]> {
-  const data = await fetchJson<WeatherStatusEntry[]>(
-    `${BASE}/import/public/tap/stations/weather-data/all`,
-  );
-  return data.map((entry) => ({
-    stationId: entry.stationId,
-    status: statusFromQuality(entry.successful, entry.qualityPercentage),
-    updatedAt: entry.createdAt,
-  }));
-}
-
-function statusFromQuality(successful: boolean, qualityPercentage: number): "green" | "amber" | "red" {
-  if (!successful) return "red";
-  if (qualityPercentage < 80) return "amber";
-  return "green";
 }
 
 // IMPORTANT: the JSON "toorandmed" endpoint (/import/public/tap/stations/road-camera/metadata)

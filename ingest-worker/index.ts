@@ -1,5 +1,6 @@
-import { fetchAllHazards, fetchCamerasMetadata, fetchWeatherStationsMetadata, fetchWeatherStationsStatus } from "./src/tarktee";
-import { upsertCameras, upsertHazardsAndGetChanged, upsertWeatherStations, upsertWeatherStatus } from "./src/db";
+import { fetchAllHazards, fetchCamerasMetadata } from "./src/tarktee";
+import { fetchRestrictions, fetchWeatherReadings } from "./src/arcgis";
+import { upsertCameras, upsertHazardsAndGetChanged, upsertRestrictions, upsertWeatherReadings } from "./src/db";
 
 interface Env {
   DB: D1Database;
@@ -27,14 +28,14 @@ async function runStep(name: string, step: () => Promise<void>): Promise<void> {
 }
 
 async function pollTarkTee(env: Env): Promise<void> {
-  await runStep("weatherStations", async () => {
-    const stations = await fetchWeatherStationsMetadata();
-    await upsertWeatherStations(env.DB, stations);
+  await runStep("weatherReadings", async () => {
+    const readings = await fetchWeatherReadings();
+    await upsertWeatherReadings(env.DB, readings);
   });
 
-  await runStep("weatherStatus", async () => {
-    const statuses = await fetchWeatherStationsStatus();
-    await upsertWeatherStatus(env.DB, statuses);
+  await runStep("restrictions", async () => {
+    const restrictions = await fetchRestrictions();
+    await upsertRestrictions(env.DB, restrictions);
   });
 
   await runStep("cameras", async () => {

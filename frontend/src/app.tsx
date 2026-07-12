@@ -40,6 +40,7 @@ export function App() {
       weatherStations: t.info.legendWeatherStationsTitle,
       cameras: t.info.legendCamerasTitle,
       hazards: t.info.legendHazardsTitle,
+      restrictions: t.info.legendRestrictionsTitle,
     }),
     [locale],
   );

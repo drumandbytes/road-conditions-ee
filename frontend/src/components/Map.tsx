@@ -4,7 +4,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import { Protocol } from "pmtiles";
 import { layers, namedFlavor } from "@protomaps/basemaps";
 import { ESTONIA_BOUNDS, MAX_PAN_BOUNDS, ESTONIA_TILES_URL } from "../lib/config";
-import { getCameras, getHazards, getWeatherStations } from "../lib/api";
+import { getCameras, getHazards, getRestrictions, getWeatherStations } from "../lib/api";
 import type { Locale } from "./InfoPanel";
 
 // Registered once at module scope, not per-mount — addProtocol is a global maplibregl
@@ -16,6 +16,7 @@ const CLUSTER_LAYER_PAINT = {
   weatherStations: "#2e9bff",
   cameras: "#8e44ad",
   hazards: "#ff3b30",
+  restrictions: "#e67e22",
 } as const;
 
 // One small white glyph per marker type, layered on top of its colored circle — plain
@@ -33,6 +34,11 @@ const ICON_SVG: Record<keyof typeof CLUSTER_LAYER_PAINT, string> = {
   hazards:
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">' +
     '<path fill="#fff" fill-rule="evenodd" clip-rule="evenodd" d="M12 3.2 22 20H2L12 3.2Zm-1.1 6.3v5.2h2.2V9.5h-2.2Zm0 6.8v2h2.2v-2h-2.2Z"/></svg>',
+  // A single diagonal bar — reads as "closed/blocked" without reusing the hazard triangle's
+  // shape family, so the two marker types stay visually distinct at a glance.
+  restrictions:
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">' +
+    '<rect fill="#fff" x="2" y="10.5" width="20" height="3" rx="1.5" transform="rotate(-25 12 12)"/></svg>',
 };
 
 // MapLibre's addImage() needs an actual decoded image, not raw SVG markup — load each icon
@@ -53,9 +59,6 @@ function loadMapImage(map: maplibregl.Map, id: string, svg: string): Promise<voi
 }
 
 interface PopupsT {
-  statusGreen: string;
-  statusAmber: string;
-  statusRed: string;
   lastUpdated: string;
   until: string;
   ongoing: string;
@@ -66,6 +69,43 @@ interface PopupsT {
   hazardReducedVisibility: string;
   hazardBlockage: string;
   hazardWeather: string;
+  roadConditionOk: string;
+  roadConditionColdWetSurface: string;
+  roadConditionStale: string;
+  roadSurfaceDry: string;
+  roadSurfaceMoist: string;
+  roadSurfaceWet: string;
+  roadTemp: string;
+  airTemp: string;
+  wind: string;
+  humidity: string;
+  visibility: string;
+  grip: string;
+  precipRain: string;
+  precipSnow: string;
+  precipSleet: string;
+  precipHail: string;
+  precipDrizzle: string;
+  precipFreezingRain: string;
+  restrictionRoad: string;
+  restrictionContractor: string;
+  restrictionCauseOther: string;
+  restrictionCauseConstruction: string;
+  restrictionCauseEvent: string;
+  restrictionCauseUtilityComsConstruction: string;
+  restrictionCausePaving: string;
+  restrictionCauseGeologicalStudies: string;
+  restrictionCauseCulvertRepairs: string;
+  restrictionCauseBarrierWorks: string;
+  restrictionCauseRoadSurfaceMarking: string;
+  restrictionCauseGravelRoadRepairs: string;
+  restrictionCauseSidewalkConstruction: string;
+  restrictionCauseStorageOfMaterials: string;
+  restrictionEffectSpeedLimited: string;
+  restrictionEffectOther: string;
+  restrictionEffectOneWayClosed: string;
+  restrictionEffectLaneClosed: string;
+  restrictionEffectCompleteClosure: string;
 }
 
 // Escapes text pulled from Tark Tee's data (station names, hazard descriptions) before it
@@ -84,29 +124,85 @@ function formatDateTime(iso: string | null, locale: Locale): string | null {
   );
 }
 
-const STATUS_LABEL_KEY: Record<string, keyof PopupsT> = {
-  green: "statusGreen",
-  amber: "statusAmber",
-  red: "statusRed",
+// road_status_aggregate is the upstream service's own headline classification (see
+// ingest-worker/src/arcgis.ts) — used as the popup's colored status line, same visual pattern
+// the old green/amber/red status used, just driven by real data instead of feed-health only.
+const ROAD_CONDITION_LABEL_KEY: Record<string, keyof PopupsT> = {
+  OK: "roadConditionOk",
+  COLD_WET_SURFACE: "roadConditionColdWetSurface",
+  OVER_2_HOURS: "roadConditionStale",
 };
 
-const STATUS_COLOR: Record<string, string> = {
-  green: "var(--color-success)",
-  amber: "var(--color-gold)",
-  red: "var(--color-danger)",
+const ROAD_CONDITION_COLOR: Record<string, string> = {
+  OK: "var(--color-success)",
+  COLD_WET_SURFACE: "var(--color-gold)",
+  OVER_2_HOURS: "var(--color-text-secondary)",
 };
 
+const ROAD_SURFACE_LABEL_KEY: Record<string, keyof PopupsT> = {
+  DRY: "roadSurfaceDry",
+  MOIST: "roadSurfaceMoist",
+  WET: "roadSurfaceWet",
+};
+
+const PRECIPITATION_LABEL_KEY: Record<string, keyof PopupsT> = {
+  RAIN: "precipRain",
+  SNOW: "precipSnow",
+  SLEET: "precipSleet",
+  HAIL: "precipHail",
+  DRIZZLE: "precipDrizzle",
+  FREEZING_RAIN: "precipFreezingRain",
+};
+
+function formatVisibility(meters: number): string {
+  return meters >= 1000 ? `${(meters / 1000).toFixed(1)} km` : `${meters} m`;
+}
+
+// Shows the station's actual measured values (temp, road surface, wind, grip) rather than
+// just a "reporting normally" status dot — see the conversation that led here: a status-only
+// popup doesn't tell anyone whether the road is actually fine, and this data (sourced from
+// ingest-worker's arcgis.ts) is what makes that answerable.
 function buildWeatherPopupHtml(properties: Record<string, unknown>, locale: Locale, t: PopupsT): string {
   const name = escapeHtml(String(properties.name ?? ""));
-  const status = String(properties.status ?? "");
-  const statusLabelKey = STATUS_LABEL_KEY[status];
-  const statusLabel = escapeHtml(statusLabelKey ? t[statusLabelKey] : status);
-  const statusColor = STATUS_COLOR[status] ?? "var(--color-text-secondary)";
-  const updated = formatDateTime(properties.lastUpdatedAt ? String(properties.lastUpdatedAt) : null, locale);
+  const aggregate = String(properties.roadStatusAggregate ?? "");
+  const aggregateLabelKey = ROAD_CONDITION_LABEL_KEY[aggregate];
+  const aggregateLabel = escapeHtml(aggregateLabelKey ? t[aggregateLabelKey] : aggregate);
+  const aggregateColor = ROAD_CONDITION_COLOR[aggregate] ?? "var(--color-text-secondary)";
+
+  const rows: string[] = [];
+  if (typeof properties.roadTemp === "number") {
+    rows.push(`${escapeHtml(t.roadTemp)}: ${properties.roadTemp.toFixed(1)}°C`);
+  }
+  if (typeof properties.airTemp === "number") {
+    rows.push(`${escapeHtml(t.airTemp)}: ${properties.airTemp.toFixed(1)}°C`);
+  }
+  const roadSurfaceKey = ROAD_SURFACE_LABEL_KEY[String(properties.roadStatus ?? "")];
+  if (roadSurfaceKey) rows.push(escapeHtml(t[roadSurfaceKey]));
+  const precipKey = PRECIPITATION_LABEL_KEY[String(properties.precipitationType ?? "")];
+  if (precipKey) {
+    const intensity = properties.precipitationIntensity;
+    const intensitySuffix = typeof intensity === "number" && intensity > 0 ? ` (${intensity.toFixed(1)} mm/h)` : "";
+    rows.push(`${escapeHtml(t[precipKey])}${intensitySuffix}`);
+  }
+  if (typeof properties.windSpeed === "number") {
+    rows.push(`${escapeHtml(t.wind)}: ${properties.windSpeed.toFixed(1)} m/s`);
+  }
+  if (typeof properties.airHumidity === "number") {
+    rows.push(`${escapeHtml(t.humidity)}: ${Math.round(properties.airHumidity)}%`);
+  }
+  if (typeof properties.visibility === "number") {
+    rows.push(`${escapeHtml(t.visibility)}: ${formatVisibility(properties.visibility)}`);
+  }
+  if (typeof properties.gripFactor === "number") {
+    rows.push(`${escapeHtml(t.grip)}: ${properties.gripFactor.toFixed(2)}`);
+  }
+
+  const updated = formatDateTime(properties.measurementTime ? String(properties.measurementTime) : null, locale);
 
   return `
     <div class="map-popup-title">${name}</div>
-    <div class="map-popup-status"><span class="map-popup-status-dot" style="background:${statusColor}"></span>${statusLabel}</div>
+    <div class="map-popup-status"><span class="map-popup-status-dot" style="background:${aggregateColor}"></span>${aggregateLabel}</div>
+    ${rows.length > 0 ? `<div class="map-popup-desc">${rows.join("<br>")}</div>` : ""}
     ${updated ? `<div class="map-popup-meta">${escapeHtml(t.lastUpdated)}: ${escapeHtml(updated)}</div>` : ""}
   `;
 }
@@ -139,10 +235,67 @@ function buildHazardPopupHtml(properties: Record<string, unknown>, locale: Local
   `;
 }
 
+const RESTRICTION_CAUSE_LABEL_KEY: Record<string, keyof PopupsT> = {
+  OTHER: "restrictionCauseOther",
+  CONSTRUCTION: "restrictionCauseConstruction",
+  EVENT: "restrictionCauseEvent",
+  UTILITY_COMS_CONSTRUCTION: "restrictionCauseUtilityComsConstruction",
+  PAVING: "restrictionCausePaving",
+  GEOLOGICAL_STUDIES: "restrictionCauseGeologicalStudies",
+  CULVERT_REPAIRS: "restrictionCauseCulvertRepairs",
+  BARRIER_WORKS: "restrictionCauseBarrierWorks",
+  ROAD_SURFACE_MARKING: "restrictionCauseRoadSurfaceMarking",
+  GRAVEL_ROAD_REPAIRS: "restrictionCauseGravelRoadRepairs",
+  SIDEWALK_CONSTRUCTION: "restrictionCauseSidewalkConstruction",
+  STORAGE_OF_MATERIALS: "restrictionCauseStorageOfMaterials",
+};
+
+const RESTRICTION_EFFECT_LABEL_KEY: Record<string, keyof PopupsT> = {
+  SPEED_LIMITED: "restrictionEffectSpeedLimited",
+  OTHER: "restrictionEffectOther",
+  ONE_WAY_CLOSED: "restrictionEffectOneWayClosed",
+  LANE_CLOSED: "restrictionEffectLaneClosed",
+  COMPLETE_CLOSURE: "restrictionEffectCompleteClosure",
+};
+
+const RESTRICTION_EFFECT_COLOR: Record<string, string> = {
+  COMPLETE_CLOSURE: "var(--color-danger)",
+  ONE_WAY_CLOSED: "var(--color-gold)",
+  LANE_CLOSED: "var(--color-gold)",
+  SPEED_LIMITED: "var(--color-gold)",
+  OTHER: "var(--color-text-secondary)",
+};
+
+function buildRestrictionPopupHtml(properties: Record<string, unknown>, locale: Locale, t: PopupsT): string {
+  const roadName = properties.roadName ? escapeHtml(String(properties.roadName)) : escapeHtml(t.restrictionRoad);
+  const effect = String(properties.effect ?? "");
+  const effectLabelKey = RESTRICTION_EFFECT_LABEL_KEY[effect];
+  const effectLabel = escapeHtml(effectLabelKey ? t[effectLabelKey] : effect);
+  const effectColor = RESTRICTION_EFFECT_COLOR[effect] ?? "var(--color-text-secondary)";
+  const causeLabelKey = RESTRICTION_CAUSE_LABEL_KEY[String(properties.cause ?? "")];
+  const causeLabel = causeLabelKey ? escapeHtml(t[causeLabelKey]) : null;
+  const extraInfo = properties.extraInfo ? escapeHtml(String(properties.extraInfo)) : null;
+  const dateFrom = formatDateTime(properties.dateFrom ? String(properties.dateFrom) : null, locale);
+  const dateTo = formatDateTime(properties.dateTo ? String(properties.dateTo) : null, locale);
+  const timeLine = dateFrom
+    ? `${escapeHtml(dateFrom)}${dateTo ? ` – ${escapeHtml(dateTo)}` : ` (${escapeHtml(t.ongoing)})`}`
+    : null;
+  const contractor = properties.contractorOrganization ? escapeHtml(String(properties.contractorOrganization)) : null;
+
+  return `
+    <div class="map-popup-title"><span class="map-popup-status-dot" style="background:${effectColor}"></span>${roadName}</div>
+    <div class="map-popup-status">${effectLabel}${causeLabel ? ` — ${causeLabel}` : ""}</div>
+    ${extraInfo ? `<div class="map-popup-desc">${extraInfo}</div>` : ""}
+    ${timeLine ? `<div class="map-popup-meta">${timeLine}</div>` : ""}
+    ${contractor ? `<div class="map-popup-meta">${escapeHtml(t.restrictionContractor)}: ${contractor}</div>` : ""}
+  `;
+}
+
 interface MarkerLabelsT {
   weatherStations: string;
   cameras: string;
   hazards: string;
+  restrictions: string;
 }
 
 function addClusteredSource(map: maplibregl.Map, id: keyof typeof CLUSTER_LAYER_PAINT, data: GeoJSON.FeatureCollection) {
@@ -249,7 +402,9 @@ function openMarkerFeature(
   const html =
     feature.source === "weatherStations"
       ? buildWeatherPopupHtml(properties, locale, popupsT)
-      : buildHazardPopupHtml(properties, locale, popupsT);
+      : feature.source === "restrictions"
+        ? buildRestrictionPopupHtml(properties, locale, popupsT)
+        : buildHazardPopupHtml(properties, locale, popupsT);
   new maplibregl.Popup({ className: "map-popup", maxWidth: "260px" }).setLngLat(coordinates).setHTML(html).addTo(map);
 }
 
@@ -411,11 +566,12 @@ export function Map({ flavor, locale, popupsT, markerLabelsT, onCameraClick }: M
         Promise.all(
           (Object.keys(ICON_SVG) as (keyof typeof ICON_SVG)[]).map((key) => loadMapImage(map!, key, ICON_SVG[key])),
         )
-          .then(() => Promise.all([getWeatherStations(), getCameras(), getHazards()]))
-          .then(([weatherStations, cameras, hazards]) => {
+          .then(() => Promise.all([getWeatherStations(), getCameras(), getHazards(), getRestrictions()]))
+          .then(([weatherStations, cameras, hazards, restrictions]) => {
             addClusteredSource(map!, "weatherStations", weatherStations);
             addClusteredSource(map!, "cameras", cameras);
             addClusteredSource(map!, "hazards", hazards);
+            addClusteredSource(map!, "restrictions", restrictions);
             setupPointClickHandling(map!, locale, popupsT, markerLabelsT, onCameraClick);
           })
           .catch((err) => console.error("Failed to load map data layers", err))

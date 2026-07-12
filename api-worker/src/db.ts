@@ -3,8 +3,38 @@ export interface WeatherStationRow {
   name: string;
   lat: number;
   lng: number;
-  status: string | null;
+  road_status: string | null;
+  road_status_aggregate: string | null;
+  road_temp: number | null;
+  air_temp: number | null;
+  precipitation_type: string | null;
+  precipitation_intensity: number | null;
+  wind_dir: number | null;
+  wind_speed: number | null;
+  air_humidity: number | null;
+  visibility: number | null;
+  grip_factor: number | null;
+  measurement_time: string | null;
   last_updated_at: string | null;
+}
+
+export interface RestrictionRow {
+  id: number;
+  road_nr: number | null;
+  road_name: string | null;
+  road_type: string | null;
+  cause: string | null;
+  effect: string | null;
+  extra_info: string | null;
+  detour_comment: string | null;
+  contractor_organization: string | null;
+  contractor_contact_phone: string | null;
+  traffic_ctrl_organization: string | null;
+  traffic_ctrl_contact_phone: string | null;
+  date_from: string | null;
+  date_to: string | null;
+  lat: number;
+  lng: number;
 }
 
 export interface CameraRow {
@@ -28,6 +58,11 @@ export interface HazardRow {
 
 export async function getWeatherStations(db: D1Database): Promise<WeatherStationRow[]> {
   const { results } = await db.prepare("SELECT * FROM weather_stations").all<WeatherStationRow>();
+  return results;
+}
+
+export async function getRestrictions(db: D1Database): Promise<RestrictionRow[]> {
+  const { results } = await db.prepare("SELECT * FROM restrictions").all<RestrictionRow>();
   return results;
 }
 

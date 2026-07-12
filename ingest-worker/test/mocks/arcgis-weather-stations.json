@@ -1,0 +1,42 @@
+{
+  "features": [
+    {
+      "attributes": {
+        "objectid": 47,
+        "site_name": "Aranküla",
+        "road_status_aggregate": "COLD_WET_SURFACE",
+        "road_status": "MOIST",
+        "road_temp": 21.7,
+        "air_temp": 17.6,
+        "precipitation_type": "NO_PRECIPITATION",
+        "precipitation_intensity": 0.0,
+        "wind_dir": 347,
+        "wind_speed": 0.6,
+        "air_humidity": 95.0,
+        "visibility": 2000,
+        "measurement_time": 1783796400000,
+        "grip_factor": 0.37
+      },
+      "geometry": { "x": 547950.218298696, "y": 6544746.042970598 }
+    },
+    {
+      "attributes": {
+        "objectid": 58,
+        "site_name": "Luhamaa",
+        "road_status_aggregate": "OVER_2_HOURS",
+        "road_status": null,
+        "road_temp": null,
+        "air_temp": 17.9,
+        "precipitation_type": null,
+        "precipitation_intensity": null,
+        "wind_dir": null,
+        "wind_speed": null,
+        "air_humidity": 92.0,
+        "visibility": null,
+        "measurement_time": 1783796400000,
+        "grip_factor": 0.15
+      },
+      "geometry": null
+    }
+  ]
+}

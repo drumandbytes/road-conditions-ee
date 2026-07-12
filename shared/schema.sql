@@ -62,14 +62,56 @@ CREATE TABLE vms_signs (
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- Sourced from the ArcGIS service behind Tark Tee's own map (tram/road_weather_stations),
+-- not the registered DATEX II feeds — those only ever expose batch/quality status, never real
+-- sensor readings (confirmed directly). id is that service's own objectid, not the old DATEX
+-- station id scheme.
 CREATE TABLE weather_stations (
-  id INTEGER PRIMARY KEY,        -- Tark Tee's own station id
+  id INTEGER PRIMARY KEY,
   name TEXT NOT NULL,
   lat REAL NOT NULL,
   lng REAL NOT NULL,
-  status TEXT,                   -- 'green' | 'amber' | 'red', derived from quality/status per poll
+  road_status TEXT,              -- 'DRY' | 'MOIST' | 'WET', nullable (sensor-dependent)
+  road_status_aggregate TEXT,    -- 'OK' | 'COLD_WET_SURFACE' | 'OVER_2_HOURS' (stale data), etc.
+  road_temp REAL,
+  air_temp REAL,
+  precipitation_type TEXT,
+  precipitation_intensity REAL,
+  wind_dir INTEGER,
+  wind_speed REAL,
+  air_humidity REAL,
+  visibility INTEGER,
+  grip_factor REAL,              -- friction estimate, 0 (slick) to ~1 (dry grip)
+  measurement_time TEXT,
   last_updated_at TEXT
 );
+
+-- Roadworks/closures/restrictions, also from the ArcGIS service (tram/restrictions_traffic) —
+-- a separate, much broader category than the `hazards` table's DATEX SRTI safety situations
+-- (routine paving/maintenance vs. accidents/slippery-road alerts). id is that service's
+-- objectid. Only currently-active-or-starting-soon rows are ingested (see ingest-worker's
+-- arcgis.ts where-clause) — the upstream layer holds a multi-year historical archive we don't
+-- want to store in full.
+CREATE TABLE restrictions (
+  id INTEGER PRIMARY KEY,
+  road_nr INTEGER,
+  road_name TEXT,
+  road_type TEXT,
+  cause TEXT,
+  effect TEXT,
+  extra_info TEXT,
+  detour_comment TEXT,
+  contractor_organization TEXT,
+  contractor_contact_phone TEXT,
+  traffic_ctrl_organization TEXT,
+  traffic_ctrl_contact_phone TEXT,
+  date_from TEXT,
+  date_to TEXT,
+  lat REAL NOT NULL,
+  lng REAL NOT NULL,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX idx_restrictions_date_to ON restrictions(date_to);
 
 CREATE TABLE cameras (
   id TEXT PRIMARY KEY,           -- UUID, from the roadCameraLocations DATEX II feed —

@@ -3,6 +3,7 @@ import { corsHeaders, handlePreflight, isAllowedOrigin } from "./src/cors";
 import { handleCameraImage, handleCameras } from "./src/routes/cameras";
 import { handleCheckout, handleCheckoutSession, handlePortal } from "./src/routes/checkout";
 import { handleHazards } from "./src/routes/hazards";
+import { handleRestrictions } from "./src/routes/restrictions";
 import { handleStripeWebhook } from "./src/routes/stripe-webhook";
 import { handleSubscribe, handleUnsubscribe } from "./src/routes/subscribe";
 import { handleVms } from "./src/routes/vms";
@@ -44,6 +45,9 @@ async function route(request: Request, env: Env): Promise<Response> {
   }
   if (method === "GET" && pathname === "/api/hazards") {
     return handleHazards(env.DB);
+  }
+  if (method === "GET" && pathname === "/api/restrictions") {
+    return handleRestrictions(env.DB);
   }
 
   // Paid-gated routes.

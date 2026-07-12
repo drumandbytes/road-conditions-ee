@@ -1,4 +1,5 @@
-import type { CameraMeta, HazardRecord, WeatherStationMeta, WeatherStationStatus } from "./tarktee";
+import type { CameraMeta, HazardRecord } from "./tarktee";
+import type { Restriction, WeatherReading } from "./arcgis";
 
 // db.batch([]) throws "D1_ERROR: No SQL statements detected" on an empty array — confirmed
 // in production (broke the cameras upsert when every entry from the old, broken metadata
@@ -9,19 +10,86 @@ async function batchIfNonEmpty(db: D1Database, statements: D1PreparedStatement[]
   await db.batch(statements);
 }
 
-export async function upsertWeatherStations(db: D1Database, stations: WeatherStationMeta[]): Promise<void> {
+export async function upsertWeatherReadings(db: D1Database, readings: WeatherReading[]): Promise<void> {
   const stmt = db.prepare(
-    `INSERT INTO weather_stations (id, name, lat, lng) VALUES (?, ?, ?, ?)
-     ON CONFLICT(id) DO UPDATE SET name = excluded.name, lat = excluded.lat, lng = excluded.lng`,
+    `INSERT INTO weather_stations (
+       id, name, lat, lng, road_status, road_status_aggregate, road_temp, air_temp,
+       precipitation_type, precipitation_intensity, wind_dir, wind_speed, air_humidity,
+       visibility, grip_factor, measurement_time, last_updated_at
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+     ON CONFLICT(id) DO UPDATE SET
+       name = excluded.name, lat = excluded.lat, lng = excluded.lng,
+       road_status = excluded.road_status, road_status_aggregate = excluded.road_status_aggregate,
+       road_temp = excluded.road_temp, air_temp = excluded.air_temp,
+       precipitation_type = excluded.precipitation_type, precipitation_intensity = excluded.precipitation_intensity,
+       wind_dir = excluded.wind_dir, wind_speed = excluded.wind_speed, air_humidity = excluded.air_humidity,
+       visibility = excluded.visibility, grip_factor = excluded.grip_factor,
+       measurement_time = excluded.measurement_time, last_updated_at = datetime('now')`,
   );
-  await batchIfNonEmpty(db, stations.map((s) => stmt.bind(s.id, s.name, s.lat, s.lng)));
+  await batchIfNonEmpty(
+    db,
+    readings.map((r) =>
+      stmt.bind(
+        r.id, r.name, r.lat, r.lng, r.roadStatus, r.roadStatusAggregate, r.roadTemp, r.airTemp,
+        r.precipitationType, r.precipitationIntensity, r.windDir, r.windSpeed, r.airHumidity,
+        r.visibility, r.gripFactor, r.measurementTime,
+      ),
+    ),
+  );
+
+  // The upstream objectid set isn't fully stable poll to poll — confirmed directly in
+  // production (D1 accumulated 213 distinct ids from a feed that only ever reports ~117 at
+  // once). Sweep out anything that fell out of the current response, same pattern as
+  // restrictions below. Short grace window since this feed refreshes every 2 minutes, unlike
+  // restrictions' 1-hour one.
+  if (readings.length > 0) {
+    const placeholders = readings.map(() => "?").join(",");
+    await db
+      .prepare(`DELETE FROM weather_stations WHERE id NOT IN (${placeholders}) AND (last_updated_at IS NULL OR last_updated_at < datetime('now', '-10 minutes'))`)
+      .bind(...readings.map((r) => r.id))
+      .run();
+  }
 }
 
-export async function upsertWeatherStatus(db: D1Database, statuses: WeatherStationStatus[]): Promise<void> {
+export async function upsertRestrictions(db: D1Database, restrictions: Restriction[]): Promise<void> {
   const stmt = db.prepare(
-    `UPDATE weather_stations SET status = ?, last_updated_at = ? WHERE id = ?`,
+    `INSERT INTO restrictions (
+       id, road_nr, road_name, road_type, cause, effect, extra_info, detour_comment,
+       contractor_organization, contractor_contact_phone, traffic_ctrl_organization,
+       traffic_ctrl_contact_phone, date_from, date_to, lat, lng, updated_at
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+     ON CONFLICT(id) DO UPDATE SET
+       road_nr = excluded.road_nr, road_name = excluded.road_name, road_type = excluded.road_type,
+       cause = excluded.cause, effect = excluded.effect, extra_info = excluded.extra_info,
+       detour_comment = excluded.detour_comment, contractor_organization = excluded.contractor_organization,
+       contractor_contact_phone = excluded.contractor_contact_phone,
+       traffic_ctrl_organization = excluded.traffic_ctrl_organization,
+       traffic_ctrl_contact_phone = excluded.traffic_ctrl_contact_phone,
+       date_from = excluded.date_from, date_to = excluded.date_to,
+       lat = excluded.lat, lng = excluded.lng, updated_at = datetime('now')`,
   );
-  await batchIfNonEmpty(db, statuses.map((s) => stmt.bind(s.status, s.updatedAt, s.stationId)));
+  await batchIfNonEmpty(
+    db,
+    restrictions.map((r) =>
+      stmt.bind(
+        r.id, r.roadNr, r.roadName, r.roadType, r.cause, r.effect, r.extraInfo, r.detourComment,
+        r.contractorOrganization, r.contractorContactPhone, r.trafficCtrlOrganization,
+        r.trafficCtrlContactPhone, r.dateFrom, r.dateTo, r.lat, r.lng,
+      ),
+    ),
+  );
+
+  // Restrictions ending/no-longer-qualifying under the active-window filter (see arcgis.ts's
+  // activeRestrictionsWhereClause) fall out of the upstream response entirely rather than
+  // coming back with an updated date_to — so unlike hazards/cameras, stale rows here need an
+  // explicit sweep, not just an upsert.
+  if (restrictions.length > 0) {
+    const placeholders = restrictions.map(() => "?").join(",");
+    await db
+      .prepare(`DELETE FROM restrictions WHERE id NOT IN (${placeholders}) AND updated_at < datetime('now', '-1 hour')`)
+      .bind(...restrictions.map((r) => r.id))
+      .run();
+  }
 }
 
 // Cameras are keyed by UUID (from the roadCameraLocations feed) — see tarktee.ts for why
