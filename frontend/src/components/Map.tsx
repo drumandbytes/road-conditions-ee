@@ -20,6 +20,9 @@ const CLUSTER_LAYER_PAINT = {
   vms: "#16a085",
 } as const;
 
+export type LayerId = keyof typeof CLUSTER_LAYER_PAINT;
+export const LAYER_IDS = Object.keys(CLUSTER_LAYER_PAINT) as LayerId[];
+
 // VMS sign marker styling — three cases, confirmed against production data (150 signs: 122
 // have a speed_limit, of which 12 also have a warning; the other 28 have neither):
 // - has a speed_limit: rendered as an actual speed-limit-sign face (white circle, red ring,
@@ -377,6 +380,11 @@ interface PointStyleOverrides {
   iconImage?: ColorExpr;
   textField?: maplibregl.ExpressionSpecification;
   textColor?: string;
+  // Initial visibility at layer-creation time — subsequent toggles are applied live via
+  // setLayoutProperty in Map's own separate effect (see visibleLayers below), not by
+  // recreating the layer, but a fresh addClusteredSource call (e.g. after a theme/locale
+  // rebuild) needs to start in the right state rather than always defaulting to visible.
+  visible?: boolean;
 }
 
 function addClusteredSource(
@@ -393,7 +401,9 @@ function addClusteredSource(
     iconImage = id,
     textField,
     textColor = "#111111",
+    visible = true,
   } = overrides;
+  const visibility = visible ? "visible" : "none";
 
   map.addSource(id, { type: "geojson", data, cluster: true, clusterMaxZoom: 14, clusterRadius: 50 });
 
@@ -402,6 +412,7 @@ function addClusteredSource(
     type: "circle",
     source: id,
     filter: ["has", "point_count"],
+    layout: { visibility },
     paint: {
       "circle-color": CLUSTER_LAYER_PAINT[id],
       "circle-radius": ["step", ["get", "point_count"], 14, 10, 18, 50, 24],
@@ -422,7 +433,12 @@ function addClusteredSource(
     // matching cluster-count labels. This wasn't just cosmetic — the resulting continuous
     // failed-glyph retry loop meant the map's "idle" event never fired, which is why the
     // loading-overlay logic elsewhere had to rely on the weaker "load" event instead.
-    layout: { "text-field": "{point_count_abbreviated}", "text-size": 12, "text-font": ["Noto Sans Regular"] },
+    layout: {
+      "text-field": "{point_count_abbreviated}",
+      "text-size": 12,
+      "text-font": ["Noto Sans Regular"],
+      visibility,
+    },
     paint: { "text-color": "#ffffff" },
   });
 
@@ -431,6 +447,7 @@ function addClusteredSource(
     type: "circle",
     source: id,
     filter: ["!", ["has", "point_count"]],
+    layout: { visibility },
     paint: {
       "circle-color": fillColor,
       // Bumped from the original 6px — a legible icon on top needs a bit more room than a
@@ -451,6 +468,7 @@ function addClusteredSource(
       "icon-size": 0.58,
       "icon-allow-overlap": true,
       "icon-ignore-placement": true,
+      visibility,
       // Only set when a layer actually uses text (currently just vms's speed-limit number) —
       // omitted entirely for everything else, matching the pre-existing generated layer spec
       // byte-for-byte rather than adding an always-empty text-field to every layer.
@@ -612,6 +630,7 @@ interface MapProps {
   // not in that flow.
   pinDraft: { lat: number; lng: number } | null;
   onPinDragEnd: (lat: number, lng: number) => void;
+  visibleLayers: Record<LayerId, boolean>;
 }
 
 export function Map({
@@ -623,6 +642,7 @@ export function Map({
   onViewHistory,
   pinDraft,
   onPinDragEnd,
+  visibleLayers,
 }: MapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   // Gates the loading overlay — without this, a slow or interrupted tile fetch (confirmed:
@@ -630,6 +650,13 @@ export function Map({
   // indication it's still loading, which reads as broken rather than "in progress."
   const [tilesReady, setTilesReady] = useState(false);
   const [dataReady, setDataReady] = useState(false);
+  // Read via a ref inside the init effect (see visibleLayers below) rather than added to that
+  // effect's own dependency array — a toggle shouldn't rebuild the whole map (refetching every
+  // layer's data); it's applied live instead, via the separate effect below this component.
+  // The ref just needs to hold the latest value for the *next* rebuild (a theme/locale change)
+  // to start from the right state.
+  const visibleLayersRef = useRef(visibleLayers);
+  visibleLayersRef.current = visibleLayers;
   // Lets the separate pin-marker effect below reach the current map instance, which otherwise
   // only exists as a local variable inside the big init effect. onPinDragEndRef exists so the
   // marker's dragend listener (attached once, when the marker is created) always calls the
@@ -728,10 +755,14 @@ export function Map({
               "hazards",
               "restrictions",
             ];
-            addClusteredSource(map!, "weatherStations", weatherStations);
-            addClusteredSource(map!, "cameras", cameras);
-            addClusteredSource(map!, "hazards", hazards);
-            addClusteredSource(map!, "restrictions", restrictions);
+            addClusteredSource(map!, "weatherStations", weatherStations, {
+              visible: visibleLayersRef.current.weatherStations,
+            });
+            addClusteredSource(map!, "cameras", cameras, { visible: visibleLayersRef.current.cameras });
+            addClusteredSource(map!, "hazards", hazards, { visible: visibleLayersRef.current.hazards });
+            addClusteredSource(map!, "restrictions", restrictions, {
+              visible: visibleLayersRef.current.restrictions,
+            });
             // Fetched separately from the four free layers above so its own failure — a 402 for
             // free/unauthenticated users (resolved to null, not thrown, by getVmsSigns), or any
             // other network error (caught here too) — never falls into the shared .catch()
@@ -745,8 +776,7 @@ export function Map({
               .then((vms) => {
                 if (vms) {
                   // All signs are shown (not filtered) — see VMS_MUTED_COLOR's comment for the
-                  // three-way styling that distinguishes them instead. Deliberately not a
-                  // user-facing layer toggle (more UI surface than this actually needs).
+                  // three-way styling that distinguishes them instead.
                   const hasSpeedLimit: maplibregl.ExpressionSpecification = [
                     "!=",
                     ["get", "speedLimit"],
@@ -758,6 +788,7 @@ export function Map({
                     strokeColor: ["case", hasSpeedLimit, VMS_SIGN_RING_COLOR, "#ffffff"],
                     strokeWidth: 2,
                     radius: 10,
+                    visible: visibleLayersRef.current.vms,
                     iconImage: ["case", hasSpeedLimit, "", "vms"],
                     textField: ["case", hasSpeedLimit, ["to-string", ["get", "speedLimit"]], ""],
                   });
@@ -829,6 +860,25 @@ export function Map({
       map.flyTo({ center: [pinDraft.lng, pinDraft.lat], zoom: Math.max(map.getZoom(), 14) });
     }
   }, [pinDraft]);
+
+  // A toggle from the legend applies live to whichever layers already exist — via
+  // setLayoutProperty, not by recreating them — so switching a layer off and back on doesn't
+  // re-fetch its data or lose cluster state. Layers that don't exist yet (map still loading,
+  // or vms for a free/unauthenticated session) are silently skipped via the getLayer check;
+  // they'll pick up the right initial visibility from visibleLayersRef when they're created.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    for (const id of LAYER_IDS) {
+      const visibility = visibleLayers[id] !== false ? "visible" : "none";
+      for (const suffix of ["-clusters", "-cluster-count", "-point", "-icon"]) {
+        const layerId = `${id}${suffix}`;
+        if (map.getLayer(layerId)) {
+          map.setLayoutProperty(layerId, "visibility", visibility);
+        }
+      }
+    }
+  }, [visibleLayers]);
 
   return (
     <div class="map-container">

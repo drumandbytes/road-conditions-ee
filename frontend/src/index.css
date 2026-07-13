@@ -442,6 +442,8 @@ body,
   display: flex;
   flex-direction: column;
   gap: 0.15rem;
+  flex: 1;
+  min-width: 0;
 }
 
 .legend-item-title {
@@ -453,6 +455,15 @@ body,
   font-size: 0.85rem;
   color: var(--color-text-secondary);
   line-height: 1.4;
+}
+
+.legend-toggle {
+  flex-shrink: 0;
+  margin-top: 0.3rem;
+  width: 1.05rem;
+  height: 1.05rem;
+  accent-color: var(--color-accent);
+  cursor: pointer;
 }
 
 .legend-note {

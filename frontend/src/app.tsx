@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "preact/hooks";
-import { Map } from "./components/Map";
+import { Map, LAYER_IDS } from "./components/Map";
+import type { LayerId } from "./components/Map";
 import { InfoPanel } from "./components/InfoPanel";
 import { CameraModal } from "./components/CameraModal";
 import { WeatherHistoryModal } from "./components/WeatherHistoryModal";
@@ -19,6 +20,7 @@ const DEFAULT_PIN = { lat: 59.437, lng: 24.7536 };
 const TRANSLATIONS: Record<Locale, typeof et> = { et, en };
 const LOCALE_STORAGE_KEY = "road-conditions-locale";
 const THEME_STORAGE_KEY = "road-conditions-theme";
+const VISIBLE_LAYERS_STORAGE_KEY = "road-conditions-visible-layers";
 
 function getInitialLocale(): Locale {
   const stored = localStorage.getItem(LOCALE_STORAGE_KEY);
@@ -30,6 +32,23 @@ function getInitialTheme(): Theme {
   return stored === "light" || stored === "dark" || stored === "auto" ? stored : "auto";
 }
 
+function allLayersVisible(): Record<LayerId, boolean> {
+  return Object.fromEntries(LAYER_IDS.map((id) => [id, true])) as Record<LayerId, boolean>;
+}
+
+// Merged over allLayersVisible() rather than used standalone — a layer added in a later
+// deploy (there's no version/migration concept for this key) should default to visible for
+// someone with an old stored value that predates it, not silently vanish.
+function getInitialVisibleLayers(): Record<LayerId, boolean> {
+  const stored = localStorage.getItem(VISIBLE_LAYERS_STORAGE_KEY);
+  if (!stored) return allLayersVisible();
+  try {
+    return { ...allLayersVisible(), ...JSON.parse(stored) };
+  } catch {
+    return allLayersVisible();
+  }
+}
+
 export function App() {
   const [locale, setLocale] = useState<Locale>(getInitialLocale);
   const [selectedCamera, setSelectedCamera] = useState<{ id: string; name: string } | null>(null);
@@ -37,6 +56,7 @@ export function App() {
   const [theme, setTheme] = useState<Theme>(getInitialTheme);
   const [infoOpen, setInfoOpen] = useState(false);
   const [pinDraft, setPinDraft] = useState<{ lat: number; lng: number } | null>(null);
+  const [visibleLayers, setVisibleLayers] = useState<Record<LayerId, boolean>>(getInitialVisibleLayers);
   // Bumped after a saved point is created — AccountPanel's saved-points list re-fetches
   // whenever this changes (see SavedPointsSection's effect deps), simpler than threading the
   // new point itself back up through several layers of props.
@@ -67,6 +87,10 @@ export function App() {
   useEffect(() => {
     localStorage.setItem(THEME_STORAGE_KEY, theme);
   }, [theme]);
+
+  useEffect(() => {
+    localStorage.setItem(VISIBLE_LAYERS_STORAGE_KEY, JSON.stringify(visibleLayers));
+  }, [visibleLayers]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = effectiveTheme;
@@ -131,6 +155,7 @@ export function App() {
         onViewHistory={(stationName) => setSelectedWeatherHistoryStation(stationName)}
         pinDraft={pinDraft}
         onPinDragEnd={(lat, lng) => setPinDraft({ lat, lng })}
+        visibleLayers={visibleLayers}
       />
       <InfoPanel
         t={t}
@@ -143,6 +168,8 @@ export function App() {
           setInfoOpen(false);
           setPinDraft(DEFAULT_PIN);
         }}
+        visibleLayers={visibleLayers}
+        onToggleLayer={(id, visible) => setVisibleLayers((current) => ({ ...current, [id]: visible }))}
       />
       {pinDraft && (
         <SavedPointEditor

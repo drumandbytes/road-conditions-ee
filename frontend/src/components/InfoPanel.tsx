@@ -1,11 +1,24 @@
 import { useState } from "preact/hooks";
 import { AccountPanel } from "./AccountPanel";
+import type { LayerId } from "./Map";
 import type { SavedPointsSectionT } from "./SavedPointsSection";
 
 const COFFEE_LINK = "https://buymeacoffee.com/justmaris";
 
 export type Locale = "et" | "en";
 type Tab = "info" | "account";
+
+// Color duplicated from Map.tsx's CLUSTER_LAYER_PAINT rather than imported — this file
+// already duplicates the legend's title/desc text lookups the same way, and importing just a
+// color constant isn't worth coupling this component to Map.tsx's module (which pulls in
+// maplibre-gl) for.
+const LEGEND_ROWS: { id: LayerId; color: string; titleKey: keyof InfoPanelProps["t"]["info"]; descKey: keyof InfoPanelProps["t"]["info"] }[] = [
+  { id: "weatherStations", color: "#2e9bff", titleKey: "legendWeatherStationsTitle", descKey: "legendWeatherStationsDesc" },
+  { id: "cameras", color: "#8e44ad", titleKey: "legendCamerasTitle", descKey: "legendCamerasDesc" },
+  { id: "hazards", color: "#ff3b30", titleKey: "legendHazardsTitle", descKey: "legendHazardsDesc" },
+  { id: "restrictions", color: "#e67e22", titleKey: "legendRestrictionsTitle", descKey: "legendRestrictionsDesc" },
+  { id: "vms", color: "#16a085", titleKey: "legendVmsTitle", descKey: "legendVmsDesc" },
+];
 
 interface InfoPanelProps {
   t: {
@@ -65,6 +78,8 @@ interface InfoPanelProps {
   onOpenChange: (open: boolean) => void;
   savedPointsRefreshKey: number;
   onAddSavedPoint: () => void;
+  visibleLayers: Record<LayerId, boolean>;
+  onToggleLayer: (id: LayerId, visible: boolean) => void;
 }
 
 export function InfoPanel({
@@ -75,6 +90,8 @@ export function InfoPanel({
   onOpenChange,
   savedPointsRefreshKey,
   onAddSavedPoint,
+  visibleLayers,
+  onToggleLayer,
 }: InfoPanelProps) {
   const [tab, setTab] = useState<Tab>("info");
   const [showAbout, setShowAbout] = useState(false);
@@ -155,41 +172,22 @@ export function InfoPanel({
                   <>
                     <h2>{t.info.legendTitle}</h2>
                     <ul class="legend-list">
-                      <li class="legend-row">
-                        <span class="legend-icon" style={{ background: "#2e9bff" }} />
-                        <span class="legend-text">
-                          <span class="legend-item-title">{t.info.legendWeatherStationsTitle}</span>
-                          <span class="legend-desc">{t.info.legendWeatherStationsDesc}</span>
-                        </span>
-                      </li>
-                      <li class="legend-row">
-                        <span class="legend-icon" style={{ background: "#8e44ad" }} />
-                        <span class="legend-text">
-                          <span class="legend-item-title">{t.info.legendCamerasTitle}</span>
-                          <span class="legend-desc">{t.info.legendCamerasDesc}</span>
-                        </span>
-                      </li>
-                      <li class="legend-row">
-                        <span class="legend-icon" style={{ background: "#ff3b30" }} />
-                        <span class="legend-text">
-                          <span class="legend-item-title">{t.info.legendHazardsTitle}</span>
-                          <span class="legend-desc">{t.info.legendHazardsDesc}</span>
-                        </span>
-                      </li>
-                      <li class="legend-row">
-                        <span class="legend-icon" style={{ background: "#e67e22" }} />
-                        <span class="legend-text">
-                          <span class="legend-item-title">{t.info.legendRestrictionsTitle}</span>
-                          <span class="legend-desc">{t.info.legendRestrictionsDesc}</span>
-                        </span>
-                      </li>
-                      <li class="legend-row">
-                        <span class="legend-icon" style={{ background: "#16a085" }} />
-                        <span class="legend-text">
-                          <span class="legend-item-title">{t.info.legendVmsTitle}</span>
-                          <span class="legend-desc">{t.info.legendVmsDesc}</span>
-                        </span>
-                      </li>
+                      {LEGEND_ROWS.map((row) => (
+                        <li key={row.id} class="legend-row">
+                          <span class="legend-icon" style={{ background: row.color }} />
+                          <span class="legend-text">
+                            <span class="legend-item-title">{t.info[row.titleKey]}</span>
+                            <span class="legend-desc">{t.info[row.descKey]}</span>
+                          </span>
+                          <input
+                            type="checkbox"
+                            class="legend-toggle"
+                            checked={visibleLayers[row.id] !== false}
+                            aria-label={t.info[row.titleKey]}
+                            onChange={(e) => onToggleLayer(row.id, (e.target as HTMLInputElement).checked)}
+                          />
+                        </li>
+                      ))}
                     </ul>
                     <p class="legend-note">{t.info.legendClusters}</p>
 
