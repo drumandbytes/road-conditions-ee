@@ -35,6 +35,29 @@ CREATE TABLE login_tokens (
 -- index earns its keep on the read side too, not just theoretical future use.
 CREATE INDEX idx_login_tokens_user_created ON login_tokens(user_id, created_at);
 
+-- Per-user opt in/out for non-essential email categories. No row = defaults apply (see
+-- db.ts's getEmailPreferences) — a row only exists once someone has actually made a choice
+-- (checked the signup consent box, or visited the preferences/unsubscribe page), so most
+-- users never need one written at all. Magic-link sign-in emails are deliberately NOT gated
+-- by any column here — they're requested on-demand by whoever fills the sign-in form each
+-- time, not a broadcast, and gating them risks someone locking themselves out of their own
+-- paid account by unsubscribing from everything.
+CREATE TABLE email_preferences (
+  user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  -- New features/announcements — genuinely promotional, so this defaults OFF and is only
+  -- ever turned on by explicit consent (the checkbox on Stripe Checkout, see checkout.ts) —
+  -- GDPR marketing consent needs to be opt-in, not opt-out, for an EU-based service.
+  product_updates INTEGER NOT NULL DEFAULT 0,
+  -- Downtime/maintenance/significant service changes — operationally necessary (legitimate
+  -- interest/contract necessity basis, not marketing consent), so this defaults ON, though
+  -- still fully togglable per the "full control over emails" requirement.
+  service_announcements INTEGER NOT NULL DEFAULT 1,
+  -- Renewal reminders, payment failures, subscription expiration — also legitimate-interest
+  -- basis (you need to know if your own payment method is failing), defaults ON.
+  billing INTEGER NOT NULL DEFAULT 1,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE TABLE push_subscriptions (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,

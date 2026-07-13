@@ -1,5 +1,5 @@
 import Stripe from "stripe";
-import { upsertUserFromStripe } from "../db";
+import { updateEmailPreferences, upsertUserFromStripe } from "../db";
 import type { UserRow } from "../db";
 
 // Matches the CORS allowlist's production origin (see cors.ts) — Stripe needs a real URL to
@@ -40,7 +40,7 @@ export async function handleCheckout(request: Request, env: { STRIPE_SECRET_KEY?
   if (!env.STRIPE_SECRET_KEY) {
     return Response.json({ error: "Payments are not configured yet" }, { status: 503 });
   }
-  const body = (await request.json().catch(() => ({}))) as { plan?: unknown };
+  const body = (await request.json().catch(() => ({}))) as { plan?: unknown; productUpdatesOptIn?: unknown };
   if (!isPlan(body.plan)) {
     return Response.json({ error: "Invalid or missing plan" }, { status: 400 });
   }
@@ -62,6 +62,11 @@ export async function handleCheckout(request: Request, env: { STRIPE_SECRET_KEY?
     ],
     subscription_data: { trial_period_days: TRIAL_PERIOD_DAYS },
     allow_promotion_codes: true,
+    // Carries the consent checkbox from our own pre-checkout UI (see SubscribeConsent in the
+    // frontend) through to the webhook/session-completion handlers, which set
+    // email_preferences.product_updates from it — Stripe Checkout has no native checkbox
+    // custom field, and its built-in promotions-consent collection is US-merchant-only.
+    metadata: { productUpdatesOptIn: body.productUpdatesOptIn === true ? "true" : "false" },
     success_url: `${FRONTEND_URL}/?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${FRONTEND_URL}/?checkout=cancelled`,
   });
@@ -98,6 +103,15 @@ export async function handleCheckoutSession(
     email: session.customer_details?.email ?? null,
     subscriptionStatus: "active",
   });
+  // Same metadata read as the webhook's checkout.session.completed handler — done in both
+  // places for the same reason upsertUserFromStripe is: this fast path isn't guaranteed to
+  // run before or after the webhook, so either one might be the first (or only, if the other
+  // is slow/fails) to actually apply it.
+  if (session.metadata?.productUpdatesOptIn !== undefined) {
+    await updateEmailPreferences(env.DB, user.id, {
+      productUpdates: session.metadata.productUpdatesOptIn === "true",
+    });
+  }
   return Response.json({ bearerToken: user.bearer_token });
 }
 

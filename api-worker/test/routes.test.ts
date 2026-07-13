@@ -1,3 +1,4 @@
+import Stripe from "stripe";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { handleWeatherStations } from "../src/routes/weather";
 import { handleCameraImage, handleCameras } from "../src/routes/cameras";
@@ -10,11 +11,14 @@ import { handleVms } from "../src/routes/vms";
 import { handleWeatherStationHistory } from "../src/routes/weather-history";
 import { handleListSavedPoints, handleSubscribe, handleUnsubscribe } from "../src/routes/subscribe";
 import { handleCheckout, handleCheckoutSession, handlePortal } from "../src/routes/checkout";
+import { handleGetEmailPreferences, handleUpdateEmailPreferences } from "../src/routes/email-preferences";
 import { handleStripeWebhook } from "../src/routes/stripe-webhook";
+import { handleUnsubscribeGet, handleUnsubscribePost } from "../src/routes/unsubscribe";
 import { corsHeaders, handlePreflight, isAllowedOrigin } from "../src/cors";
 import { authenticatePaidUser } from "../src/auth";
-import { updateSubscriptionStatusByStripeCustomerId, upsertUserFromStripe } from "../src/db";
+import { getEmailPreferences, updateSubscriptionStatusByStripeCustomerId, updateEmailPreferences, upsertUserFromStripe } from "../src/db";
 import type { UserRow } from "../src/db";
+import { buildUnsubscribeLink, signUnsubscribeToken, verifyUnsubscribeToken } from "../src/unsubscribe";
 
 /** Minimal D1Database fake — enough of the prepare/bind/all/first chain for these routes,
  *  matching the existing repo's pattern of hand-mocking bindings rather than pulling in
@@ -363,6 +367,38 @@ describe("updateSubscriptionStatusByStripeCustomerId", () => {
   });
 });
 
+describe("getEmailPreferences", () => {
+  it("returns the schema defaults when no row exists yet", async () => {
+    const prefs = await getEmailPreferences(fakeDb([]), "u1");
+    expect(prefs).toEqual({ productUpdates: false, serviceAnnouncements: true, billing: true });
+  });
+
+  it("returns the stored row's values, converted from 0/1 to booleans", async () => {
+    const db = fakeDb([{ product_updates: 1, service_announcements: 0, billing: 1 }]);
+    const prefs = await getEmailPreferences(db, "u1");
+    expect(prefs).toEqual({ productUpdates: true, serviceAnnouncements: false, billing: true });
+  });
+});
+
+describe("updateEmailPreferences", () => {
+  it("merges the patch over the current (default) values and upserts", async () => {
+    // first() (used by the internal getEmailPreferences read) -> null, so defaults apply.
+    const { db, calls } = fakeDbCapturing(null);
+    const result = await updateEmailPreferences(db, "u1", { productUpdates: true });
+    expect(result).toEqual({ productUpdates: true, serviceAnnouncements: true, billing: true });
+    // calls[0] is the internal SELECT's bind (just the user id); calls[1] is the
+    // INSERT...ON CONFLICT — userId, then the three columns as 0/1.
+    expect(calls[1]).toEqual(["u1", 1, 1, 1]);
+  });
+
+  it("merges the patch over an existing row's values, leaving untouched fields as-is", async () => {
+    const { db, calls } = fakeDbCapturing({ product_updates: 1, service_announcements: 1, billing: 1 });
+    const result = await updateEmailPreferences(db, "u1", { billing: false });
+    expect(result).toEqual({ productUpdates: true, serviceAnnouncements: true, billing: false });
+    expect(calls[1]).toEqual(["u1", 1, 1, 0]);
+  });
+});
+
 function checkoutRequest(body: unknown) {
   return new Request("https://example.com/api/checkout", { method: "POST", body: JSON.stringify(body) });
 }
@@ -483,7 +519,7 @@ describe("handlePortal", () => {
 describe("handleStripeWebhook", () => {
   it("returns 503 when Stripe isn't configured", async () => {
     const req = new Request("https://example.com/api/stripe-webhook", { method: "POST", body: "{}" });
-    const res = await handleStripeWebhook(req, { DB: fakeDb([]) });
+    const res = await handleStripeWebhook(req, { DB: fakeDb([]), EMAIL: fakeEmail() as unknown as SendEmail });
     expect(res.status).toBe(503);
   });
 
@@ -493,6 +529,7 @@ describe("handleStripeWebhook", () => {
       STRIPE_SECRET_KEY: "sk_test_x",
       STRIPE_WEBHOOK_SECRET: "whsec_x",
       DB: fakeDb([]),
+      EMAIL: fakeEmail() as unknown as SendEmail,
     });
     expect(res.status).toBe(400);
   });
@@ -507,8 +544,139 @@ describe("handleStripeWebhook", () => {
       STRIPE_SECRET_KEY: "sk_test_x",
       STRIPE_WEBHOOK_SECRET: "whsec_x",
       DB: fakeDb([]),
+      EMAIL: fakeEmail() as unknown as SendEmail,
     });
     expect(res.status).toBe(400);
+  });
+
+  const WEBHOOK_SECRET = "whsec_test";
+
+  async function stripeWebhookRequest(payload: object): Promise<Request> {
+    const body = JSON.stringify(payload);
+    const stripe = new Stripe("sk_test_x", { httpClient: Stripe.createFetchHttpClient() });
+    const signature = await stripe.webhooks.generateTestHeaderStringAsync({ payload: body, secret: WEBHOOK_SECRET });
+    return new Request("https://example.com/api/stripe-webhook", {
+      method: "POST",
+      body,
+      headers: { "Stripe-Signature": signature },
+    });
+  }
+
+  it("applies the product-updates consent captured in checkout.session.completed's metadata", async () => {
+    const email = fakeEmail();
+    const req = await stripeWebhookRequest({
+      id: "evt_1",
+      type: "checkout.session.completed",
+      data: {
+        object: {
+          customer: "cus_1",
+          customer_details: { email: "a@b.com" },
+          metadata: { productUpdatesOptIn: "true" },
+        },
+      },
+    });
+    const res = await handleStripeWebhook(req, {
+      STRIPE_SECRET_KEY: "sk_test_x",
+      STRIPE_WEBHOOK_SECRET: WEBHOOK_SECRET,
+      DB: sequentialDb([
+        { first: { id: "u1", email: "a@b.com", bearer_token: "tok" } }, // upsertUserFromStripe
+        { first: null }, // updateEmailPreferences's internal getEmailPreferences read
+        { run: { success: true } }, // updateEmailPreferences's upsert
+      ]),
+      EMAIL: email as unknown as SendEmail,
+      UNSUBSCRIBE_SECRET: "secret",
+    });
+    expect(res.status).toBe(200);
+  });
+
+  it("sends a subscription-ended email when the billing preference is on", async () => {
+    const email = fakeEmail();
+    const req = await stripeWebhookRequest({
+      id: "evt_2",
+      type: "customer.subscription.deleted",
+      data: { object: { customer: "cus_1", status: "canceled" } },
+    });
+    const res = await handleStripeWebhook(req, {
+      STRIPE_SECRET_KEY: "sk_test_x",
+      STRIPE_WEBHOOK_SECRET: WEBHOOK_SECRET,
+      DB: sequentialDb([
+        { run: { success: true } }, // updateSubscriptionStatusByStripeCustomerId
+        { first: { id: "u1", email: "a@b.com", bearer_token: "tok" } }, // getUserByStripeCustomerId
+        { first: { product_updates: 0, service_announcements: 1, billing: 1 } }, // getEmailPreferences
+      ]),
+      EMAIL: email as unknown as SendEmail,
+      UNSUBSCRIBE_SECRET: "secret",
+    });
+    expect(res.status).toBe(200);
+    expect(email.send).toHaveBeenCalledTimes(1);
+    expect(email.send.mock.calls[0][0].to).toBe("a@b.com");
+  });
+
+  it("skips the subscription-ended email when billing is opted out", async () => {
+    const email = fakeEmail();
+    const req = await stripeWebhookRequest({
+      id: "evt_3",
+      type: "customer.subscription.deleted",
+      data: { object: { customer: "cus_1", status: "canceled" } },
+    });
+    const res = await handleStripeWebhook(req, {
+      STRIPE_SECRET_KEY: "sk_test_x",
+      STRIPE_WEBHOOK_SECRET: WEBHOOK_SECRET,
+      DB: sequentialDb([
+        { run: { success: true } },
+        { first: { id: "u1", email: "a@b.com", bearer_token: "tok" } },
+        { first: { product_updates: 0, service_announcements: 1, billing: 0 } }, // opted out
+      ]),
+      EMAIL: email as unknown as SendEmail,
+      UNSUBSCRIBE_SECRET: "secret",
+    });
+    expect(res.status).toBe(200);
+    expect(email.send).not.toHaveBeenCalled();
+  });
+
+  it("sends a renewal reminder on invoice.upcoming with the amount and date from the invoice", async () => {
+    const email = fakeEmail();
+    const periodEnd = Math.floor(Date.UTC(2026, 7, 1) / 1000);
+    const req = await stripeWebhookRequest({
+      id: "evt_4",
+      type: "invoice.upcoming",
+      data: { object: { customer: "cus_1", amount_due: 299, period_end: periodEnd } },
+    });
+    const res = await handleStripeWebhook(req, {
+      STRIPE_SECRET_KEY: "sk_test_x",
+      STRIPE_WEBHOOK_SECRET: WEBHOOK_SECRET,
+      DB: sequentialDb([
+        { first: { id: "u1", email: "a@b.com", bearer_token: "tok" } }, // getUserByStripeCustomerId
+        { first: { product_updates: 0, service_announcements: 1, billing: 1 } }, // getEmailPreferences
+      ]),
+      EMAIL: email as unknown as SendEmail,
+      UNSUBSCRIBE_SECRET: "secret",
+    });
+    expect(res.status).toBe(200);
+    expect(email.send).toHaveBeenCalledTimes(1);
+    const sent = email.send.mock.calls[0][0];
+    expect(sent.text).toContain("2.99");
+  });
+
+  it("sends a payment-failed email on invoice.payment_failed", async () => {
+    const email = fakeEmail();
+    const req = await stripeWebhookRequest({
+      id: "evt_5",
+      type: "invoice.payment_failed",
+      data: { object: { customer: "cus_1" } },
+    });
+    const res = await handleStripeWebhook(req, {
+      STRIPE_SECRET_KEY: "sk_test_x",
+      STRIPE_WEBHOOK_SECRET: WEBHOOK_SECRET,
+      DB: sequentialDb([
+        { first: { id: "u1", email: "a@b.com", bearer_token: "tok" } },
+        { first: { product_updates: 0, service_announcements: 1, billing: 1 } },
+      ]),
+      EMAIL: email as unknown as SendEmail,
+      UNSUBSCRIBE_SECRET: "secret",
+    });
+    expect(res.status).toBe(200);
+    expect(email.send).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -824,5 +992,163 @@ describe("handleVerifyLogin", () => {
     );
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ bearerToken: "existing-tok" });
+  });
+});
+
+describe("unsubscribe token signing", () => {
+  it("round-trips: a token signed for a user id verifies for that same id", async () => {
+    const token = await signUnsubscribeToken("secret1", "u1");
+    expect(await verifyUnsubscribeToken("secret1", "u1", token)).toBe(true);
+  });
+
+  it("fails verification against a different secret", async () => {
+    const token = await signUnsubscribeToken("secret1", "u1");
+    expect(await verifyUnsubscribeToken("secret2", "u1", token)).toBe(false);
+  });
+
+  it("fails verification for a different user id (can't reuse one user's link for another)", async () => {
+    const token = await signUnsubscribeToken("secret1", "u1");
+    expect(await verifyUnsubscribeToken("secret1", "u2", token)).toBe(false);
+  });
+
+  it("fails gracefully (not throws) on a garbage, non-base64 token", async () => {
+    expect(await verifyUnsubscribeToken("secret1", "u1", "not valid base64!!")).toBe(false);
+  });
+
+  it("buildUnsubscribeLink embeds the user id, a matching signature, and the category", async () => {
+    const link = await buildUnsubscribeLink("secret1", "u1", "billing");
+    const url = new URL(link);
+    expect(url.searchParams.get("uid")).toBe("u1");
+    expect(url.searchParams.get("category")).toBe("billing");
+    const valid = await verifyUnsubscribeToken("secret1", "u1", url.searchParams.get("sig")!);
+    expect(valid).toBe(true);
+  });
+});
+
+describe("handleGetEmailPreferences", () => {
+  it("requires authentication", async () => {
+    const res = await handleGetEmailPreferences(fakeDb([]), null);
+    expect(res.status).toBe(401);
+  });
+
+  it("returns defaults for a user with no stored preferences", async () => {
+    const res = await handleGetEmailPreferences(fakeDb([]), PAID_USER);
+    expect(await res.json()).toEqual({ productUpdates: false, serviceAnnouncements: true, billing: true });
+  });
+});
+
+describe("handleUpdateEmailPreferences", () => {
+  function patchRequest(body: unknown): Request {
+    return new Request("https://example.com/api/email-preferences", { method: "PATCH", body: JSON.stringify(body) });
+  }
+
+  it("requires authentication", async () => {
+    const res = await handleUpdateEmailPreferences(patchRequest({ billing: false }), fakeDb([]), null);
+    expect(res.status).toBe(401);
+  });
+
+  it("rejects a non-boolean value for a known category", async () => {
+    const res = await handleUpdateEmailPreferences(patchRequest({ billing: "no" }), fakeDb([]), PAID_USER);
+    expect(res.status).toBe(400);
+  });
+
+  it("updates only the categories present in the body", async () => {
+    const { db } = fakeDbCapturing(null);
+    const res = await handleUpdateEmailPreferences(patchRequest({ billing: false }), db, PAID_USER);
+    expect(await res.json()).toEqual({ productUpdates: false, serviceAnnouncements: true, billing: false });
+  });
+});
+
+describe("handleUnsubscribeGet", () => {
+  it("returns 503 when UNSUBSCRIBE_SECRET isn't configured", async () => {
+    const res = await handleUnsubscribeGet(new Request("https://example.com/api/unsubscribe"), { DB: fakeDb([]) });
+    expect(res.status).toBe(503);
+  });
+
+  it("returns 400 for a missing or invalid category", async () => {
+    const res = await handleUnsubscribeGet(new Request("https://example.com/api/unsubscribe?uid=u1&sig=x"), {
+      DB: fakeDb([]),
+      UNSUBSCRIBE_SECRET: "secret1",
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 400 for a signature that doesn't verify", async () => {
+    const res = await handleUnsubscribeGet(
+      new Request("https://example.com/api/unsubscribe?uid=u1&sig=bogus&category=billing"),
+      { DB: fakeDb([]), UNSUBSCRIBE_SECRET: "secret1" },
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("unsubscribes the one category the link specifies and renders an HTML page", async () => {
+    const sig = await signUnsubscribeToken("secret1", "u1");
+    const db = sequentialDb([
+      { first: { product_updates: 0, service_announcements: 1, billing: 1 } }, // getEmailPreferences read
+      { run: { success: true } }, // upsert write
+    ]);
+    const res = await handleUnsubscribeGet(
+      new Request(`https://example.com/api/unsubscribe?uid=u1&sig=${sig}&category=billing`),
+      { DB: db, UNSUBSCRIBE_SECRET: "secret1" },
+    );
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toContain("text/html");
+    const html = await res.text();
+    expect(html).toContain('name="billing"');
+    expect(html).not.toContain('name="billing" checked');
+  });
+
+  it("unsubscribes all three categories for category=all", async () => {
+    const sig = await signUnsubscribeToken("secret1", "u1");
+    const { db, calls } = fakeDbCapturing({ product_updates: 1, service_announcements: 1, billing: 1 });
+    const res = await handleUnsubscribeGet(
+      new Request(`https://example.com/api/unsubscribe?uid=u1&sig=${sig}&category=all`),
+      { DB: db, UNSUBSCRIBE_SECRET: "secret1" },
+    );
+    expect(res.status).toBe(200);
+    expect(calls[1]).toEqual(["u1", 0, 0, 0]);
+  });
+});
+
+describe("handleUnsubscribePost", () => {
+  function formRequest(fields: Record<string, string>): Request {
+    const form = new URLSearchParams(fields);
+    return new Request("https://example.com/api/unsubscribe", {
+      method: "POST",
+      body: form.toString(),
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    });
+  }
+
+  it("returns 503 when UNSUBSCRIBE_SECRET isn't configured", async () => {
+    const res = await handleUnsubscribePost(formRequest({ uid: "u1", sig: "x" }), { DB: fakeDb([]) });
+    expect(res.status).toBe(503);
+  });
+
+  it("returns 400 when uid or sig is missing", async () => {
+    const res = await handleUnsubscribePost(formRequest({ uid: "u1" }), {
+      DB: fakeDb([]),
+      UNSUBSCRIBE_SECRET: "secret1",
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 400 for a signature that doesn't verify", async () => {
+    const res = await handleUnsubscribePost(formRequest({ uid: "u1", sig: "bogus" }), {
+      DB: fakeDb([]),
+      UNSUBSCRIBE_SECRET: "secret1",
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("treats unchecked checkboxes as false — only present fields are 'on'", async () => {
+    const sig = await signUnsubscribeToken("secret1", "u1");
+    const { db, calls } = fakeDbCapturing({ product_updates: 1, service_announcements: 1, billing: 1 });
+    const res = await handleUnsubscribePost(
+      formRequest({ uid: "u1", sig, serviceAnnouncements: "on" }), // productUpdates/billing omitted, like an unchecked checkbox
+      { DB: db, UNSUBSCRIBE_SECRET: "secret1" },
+    );
+    expect(res.status).toBe(200);
+    expect(calls[1]).toEqual(["u1", 0, 1, 0]);
   });
 });

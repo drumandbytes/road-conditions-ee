@@ -1,5 +1,6 @@
 import { useState } from "preact/hooks";
 import { AccountPanel } from "./AccountPanel";
+import type { EmailPreferencesT } from "./EmailPreferencesSection";
 import type { FeatureComparisonT } from "./FeatureComparisonTable";
 import type { LayerId } from "./Map";
 import type { SavedPointsSectionT } from "./SavedPointsSection";
@@ -72,9 +73,11 @@ interface InfoPanelProps {
       manageButton: string;
       error: string;
       signedInAs: string;
+      productUpdatesOptInLabel: string;
     } & FeatureComparisonT;
     savedPoints: SavedPointsSectionT;
     signIn: SignInFormT;
+    emailPreferences: EmailPreferencesT;
   };
   locale: Locale;
   onLocaleChange: (locale: Locale) => void;

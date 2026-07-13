@@ -1,9 +1,5 @@
 import { consumeLoginToken, countRecentLoginTokens, createLoginToken, getUserByEmail } from "../db";
-
-// Matches checkout.ts's own duplicate of this constant — see that file's comment on why it's
-// hardcoded rather than derived from the request.
-const FRONTEND_URL = "https://roadconditions.drumandbytes.ee";
-const FROM_ADDRESS = "noreply@drumandbytes.ee";
+import { buildEmailHtml, FROM_ADDRESS, FRONTEND_URL } from "../emailTemplate";
 
 const LOGIN_TOKEN_TTL_MINUTES = 15;
 // Caps how many sign-in emails one account can trigger in a short window — protects against
@@ -17,54 +13,14 @@ function isValidEmail(value: unknown): value is string {
   return typeof value === "string" && value.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
-// Inline styles and a table layout throughout — email clients (Outlook/Gmail in particular)
-// strip <style> blocks and ignore flexbox/grid, so this is the only markup that renders
-// consistently across them. Colors are hardcoded hex rather than pulled from index.css's CSS
-// variables since those aren't available in an email context.
 function buildLoginEmailHtml(link: string, ttlMinutes: number): string {
-  return `<!doctype html>
-<html lang="et">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-  </head>
-  <body style="margin:0; padding:0; background:#f0f0f3; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f0f0f3; padding:32px 16px;">
-      <tr>
-        <td align="center">
-          <table role="presentation" width="480" cellpadding="0" cellspacing="0" style="max-width:480px; width:100%; background:#ffffff; border-radius:16px; overflow:hidden;">
-            <tr>
-              <td style="padding:36px 32px 8px 32px; text-align:center;">
-                <div style="width:48px; height:48px; margin:0 auto 16px auto; background:#2e9bff; border-radius:12px; color:#ffffff; font-size:24px; font-weight:700; line-height:48px;">T</div>
-                <h1 style="margin:0; font-size:20px; font-weight:700; color:#1a1a1a;">Teeolud</h1>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:8px 32px 0 32px; text-align:center; color:#1a1a1a; font-size:16px; line-height:1.5;">
-                <p style="margin:16px 0;">Sisselogimiseks vajuta nupule (link kehtib ${ttlMinutes} minutit):</p>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:8px 32px 0 32px; text-align:center;">
-                <a href="${link}" style="display:inline-block; background:#2e9bff; color:#ffffff; font-size:16px; font-weight:600; text-decoration:none; padding:14px 32px; border-radius:10px;">Logi sisse</a>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:20px 32px 0 32px; text-align:center; color:#6e6e73; font-size:13px; line-height:1.5; word-break:break-all;">
-                <p style="margin:0 0 24px 0;">Kui nupp ei tööta, kopeeri see link brauserisse:<br /><a href="${link}" style="color:#2e9bff;">${link}</a></p>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:16px 32px 32px 32px; border-top:1px solid #f0f0f3; text-align:center; color:#6e6e73; font-size:13px; line-height:1.5;">
-                <p style="margin:16px 0 0 0;">Kui sa seda ise ei küsinud, võid selle kirja lihtsalt eirata.</p>
-              </td>
-            </tr>
-          </table>
-        </td>
-      </tr>
-    </table>
-  </body>
-</html>`;
+  return buildEmailHtml({
+    introHtml: `<p style="margin:16px 0;">Sisselogimiseks vajuta nupule (link kehtib ${ttlMinutes} minutit):</p>`,
+    button: { label: "Logi sisse", href: link },
+    footerHtml:
+      `<p style="margin:0 0 16px 0; word-break:break-all;">Kui nupp ei tööta, kopeeri see link brauserisse:<br /><a href="${link}" style="color:#2e9bff;">${link}</a></p>` +
+      '<p style="margin:0;">Kui sa seda ise ei küsinud, võid selle kirja lihtsalt eirata.</p>',
+  });
 }
 
 /** Requests a magic sign-in link for a *second* device on an already-paying account — the

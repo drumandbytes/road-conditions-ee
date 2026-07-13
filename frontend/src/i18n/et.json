@@ -137,7 +137,16 @@
     "comparisonCameraImages": "Otsepilt kaameratest",
     "comparisonVmsLive": "Liiklusmärkide reaalajas kiiruspiirangud ja hoiatused",
     "comparisonHistory": "Ilmajaamade ajalugu ja graafikud",
-    "comparisonAlerts": "Salvestatud asukohad ja push-teavitused"
+    "comparisonAlerts": "Salvestatud asukohad ja push-teavitused",
+    "productUpdatesOptInLabel": "Saada mulle e-kirju uute funktsioonide ja uuenduste kohta (harva, ainult soovi korral)"
+  },
+  "emailPreferences": {
+    "title": "E-kirjade eelistused",
+    "productUpdatesLabel": "Uued funktsioonid ja uuendused",
+    "serviceAnnouncementsLabel": "Katkestused, hooldustööd ja olulised muudatused",
+    "billingLabel": "Arved: pikendamise meeldetuletused, makseprobleemid, tellimuse staatus",
+    "loadError": "E-kirjade eelistuste laadimine ebaõnnestus.",
+    "saveError": "Salvestamine ebaõnnestus. Proovi uuesti."
   },
   "savedPoints": {
     "title": "Salvestatud asukohad",

@@ -1,6 +1,8 @@
 import { useEffect, useState } from "preact/hooks";
 import { BEARER_TOKEN_CHANGED_EVENT, getAccountStatus, startCheckout, startPortalSession } from "../lib/api";
 import type { AccountStatus, Plan } from "../lib/api";
+import { EmailPreferencesSection } from "./EmailPreferencesSection";
+import type { EmailPreferencesT } from "./EmailPreferencesSection";
 import { FeatureComparisonTable } from "./FeatureComparisonTable";
 import type { FeatureComparisonT } from "./FeatureComparisonTable";
 import { SavedPointsSection } from "./SavedPointsSection";
@@ -33,9 +35,11 @@ interface AccountPanelProps {
       manageButton: string;
       error: string;
       signedInAs: string;
+      productUpdatesOptInLabel: string;
     } & FeatureComparisonT;
     savedPoints: SavedPointsSectionT;
     signIn: SignInFormT;
+    emailPreferences: EmailPreferencesT;
   };
   savedPointsRefreshKey: number;
   onAddSavedPoint: () => void;
@@ -51,6 +55,10 @@ const PLAN_LABEL_KEYS = {
 export function AccountPanel({ t, savedPointsRefreshKey, onAddSavedPoint }: AccountPanelProps) {
   const [state, setState] = useState<LoadState>({ status: "loading" });
   const [busy, setBusy] = useState(false);
+  // Opt-in, unchecked by default — captured here (not on Stripe's hosted Checkout page, which
+  // has no native checkbox custom field and whose built-in promotions-consent collection is
+  // US-merchant-only) and carried through to checkout.session's metadata, see checkout.ts.
+  const [productUpdatesOptIn, setProductUpdatesOptIn] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -88,7 +96,7 @@ export function AccountPanel({ t, savedPointsRefreshKey, onAddSavedPoint }: Acco
   async function onSubscribe(plan: Plan) {
     setBusy(true);
     try {
-      window.location.href = await startCheckout(plan);
+      window.location.href = await startCheckout(plan, productUpdatesOptIn);
     } catch {
       setState({ status: "error" });
       setBusy(false);
@@ -138,6 +146,16 @@ export function AccountPanel({ t, savedPointsRefreshKey, onAddSavedPoint }: Acco
             ))}
           </div>
           <p class="account-trial-note">{t.account.trialNote}</p>
+          <label class="category-item">
+            <input
+              type="checkbox"
+              checked={productUpdatesOptIn}
+              onChange={() => setProductUpdatesOptIn((v) => !v)}
+            />
+            <span class="category-item-text">
+              <span class="category-item-label">{t.account.productUpdatesOptInLabel}</span>
+            </span>
+          </label>
           <FeatureComparisonTable t={t.account} />
           <SignInForm t={t.signIn} />
         </>
@@ -160,6 +178,10 @@ export function AccountPanel({ t, savedPointsRefreshKey, onAddSavedPoint }: Acco
           refreshKey={savedPointsRefreshKey}
           onAddSavedPoint={onAddSavedPoint}
         />
+      )}
+
+      {(state.status === "active" || state.status === "lifetime") && (
+        <EmailPreferencesSection t={t.emailPreferences} />
       )}
     </>
   );

@@ -137,7 +137,16 @@
     "comparisonCameraImages": "Live camera images",
     "comparisonVmsLive": "Live sign speed limits & warnings",
     "comparisonHistory": "Weather station history & graphs",
-    "comparisonAlerts": "Saved locations & push alerts"
+    "comparisonAlerts": "Saved locations & push alerts",
+    "productUpdatesOptInLabel": "Email me about new features and product updates (occasional, opt-in only)"
+  },
+  "emailPreferences": {
+    "title": "Email preferences",
+    "productUpdatesLabel": "New features and product updates",
+    "serviceAnnouncementsLabel": "Downtime, maintenance, and significant changes",
+    "billingLabel": "Billing: renewal reminders, payment issues, subscription status",
+    "loadError": "Couldn't load your email preferences.",
+    "saveError": "Couldn't save that. Try again."
   },
   "savedPoints": {
     "title": "Saved locations",

@@ -2,6 +2,7 @@ import { authenticatePaidUser } from "./src/auth";
 import { corsHeaders, handlePreflight, isAllowedOrigin } from "./src/cors";
 import { handleCameraImage, handleCameras } from "./src/routes/cameras";
 import { handleCheckout, handleCheckoutSession, handlePortal } from "./src/routes/checkout";
+import { handleGetEmailPreferences, handleUpdateEmailPreferences } from "./src/routes/email-preferences";
 import { handleGeocode } from "./src/routes/geocode";
 import { handleHazards } from "./src/routes/hazards";
 import { handleRequestLogin, handleVerifyLogin } from "./src/routes/login";
@@ -9,6 +10,7 @@ import { handlePushSubscription } from "./src/routes/push-subscription";
 import { handleRestrictions } from "./src/routes/restrictions";
 import { handleStripeWebhook } from "./src/routes/stripe-webhook";
 import { handleListSavedPoints, handleSubscribe, handleUnsubscribe } from "./src/routes/subscribe";
+import { handleUnsubscribeGet, handleUnsubscribePost } from "./src/routes/unsubscribe";
 import { handleVms } from "./src/routes/vms";
 import { handleWeatherStations } from "./src/routes/weather";
 import { handleWeatherStationHistory } from "./src/routes/weather-history";
@@ -18,6 +20,7 @@ interface Env {
   EMAIL: SendEmail;
   STRIPE_SECRET_KEY?: string;
   STRIPE_WEBHOOK_SECRET?: string;
+  UNSUBSCRIBE_SECRET?: string;
 }
 
 export default {
@@ -105,6 +108,22 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (method === "POST" && pathname === "/api/portal") {
     const user = await authenticatePaidUser(env.DB, request);
     return handlePortal(user, env);
+  }
+  if (method === "GET" && pathname === "/api/email-preferences") {
+    const user = await authenticatePaidUser(env.DB, request);
+    return handleGetEmailPreferences(env.DB, user);
+  }
+  if (method === "PATCH" && pathname === "/api/email-preferences") {
+    const user = await authenticatePaidUser(env.DB, request);
+    return handleUpdateEmailPreferences(request, env.DB, user);
+  }
+
+  // Public one-click unsubscribe — no auth (see unsubscribe.ts's own comment on why).
+  if (method === "GET" && pathname === "/api/unsubscribe") {
+    return handleUnsubscribeGet(request, env);
+  }
+  if (method === "POST" && pathname === "/api/unsubscribe") {
+    return handleUnsubscribePost(request, env);
   }
 
   // Stripe integration.

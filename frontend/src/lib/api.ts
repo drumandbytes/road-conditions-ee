@@ -91,11 +91,11 @@ export async function getAccountStatus(): Promise<AccountStatus | null> {
 
 export type Plan = "monthly" | "yearly";
 
-export async function startCheckout(plan: Plan): Promise<string> {
+export async function startCheckout(plan: Plan, productUpdatesOptIn: boolean): Promise<string> {
   const res = await apiFetch("/api/checkout", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ plan }),
+    body: JSON.stringify({ plan, productUpdatesOptIn }),
   });
   const body = (await res.json()) as { url?: string; error?: string };
   if (!body.url) throw new Error(body.error ?? "Failed to start checkout");
@@ -114,6 +114,28 @@ export async function startPortalSession(): Promise<string> {
   const body = (await res.json()) as { url?: string; error?: string };
   if (!body.url) throw new Error(body.error ?? "Failed to open billing portal");
   return body.url;
+}
+
+export interface EmailPreferences {
+  productUpdates: boolean;
+  serviceAnnouncements: boolean;
+  billing: boolean;
+}
+
+export async function getEmailPreferences(): Promise<EmailPreferences | null> {
+  const res = await apiFetch("/api/email-preferences");
+  if (!res.ok) return null;
+  return res.json();
+}
+
+export async function updateEmailPreferences(patch: Partial<EmailPreferences>): Promise<EmailPreferences> {
+  const res = await apiFetch("/api/email-preferences", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(patch),
+  });
+  if (!res.ok) throw new Error("Failed to update email preferences");
+  return res.json();
 }
 
 /** Requests a magic sign-in link for an already-paying account on a *new* device. Always

@@ -281,6 +281,14 @@ export async function updateSubscriptionStatusByStripeCustomerId(
     .run();
 }
 
+export async function getUserByStripeCustomerId(db: D1Database, stripeCustomerId: string): Promise<UserRow | null> {
+  const row = await db
+    .prepare("SELECT * FROM users WHERE stripe_customer_id = ?")
+    .bind(stripeCustomerId)
+    .first<UserRow>();
+  return row ?? null;
+}
+
 export async function getUserByEmail(db: D1Database, email: string): Promise<UserRow | null> {
   const row = await db.prepare("SELECT * FROM users WHERE email = ?").bind(email).first<UserRow>();
   return row ?? null;
@@ -334,4 +342,58 @@ export async function consumeLoginToken(db: D1Database, token: string): Promise<
 
   const user = await db.prepare("SELECT * FROM users WHERE id = ?").bind(row.user_id).first<UserRow>();
   return user ?? null;
+}
+
+export interface EmailPreferences {
+  productUpdates: boolean;
+  serviceAnnouncements: boolean;
+  billing: boolean;
+}
+
+const DEFAULT_EMAIL_PREFERENCES: EmailPreferences = {
+  productUpdates: false,
+  serviceAnnouncements: true,
+  billing: true,
+};
+
+/** No row yet means nobody has ever changed anything, so the schema's own column defaults
+ *  (see shared/schema.sql) apply — this just returns them without writing a row for every
+ *  user who never touches their preferences. */
+export async function getEmailPreferences(db: D1Database, userId: string): Promise<EmailPreferences> {
+  const row = await db
+    .prepare("SELECT product_updates, service_announcements, billing FROM email_preferences WHERE user_id = ?")
+    .bind(userId)
+    .first<{ product_updates: number; service_announcements: number; billing: number }>();
+  if (!row) return DEFAULT_EMAIL_PREFERENCES;
+  return {
+    productUpdates: row.product_updates === 1,
+    serviceAnnouncements: row.service_announcements === 1,
+    billing: row.billing === 1,
+  };
+}
+
+/** Partial update — only the categories present in `patch` change, the rest keep their
+ *  current (or default, on first write) value. Used by both the authenticated in-app
+ *  preferences UI (any subset of categories) and the public unsubscribe link (exactly one
+ *  category, or all three for "unsubscribe from everything"). */
+export async function updateEmailPreferences(
+  db: D1Database,
+  userId: string,
+  patch: Partial<EmailPreferences>,
+): Promise<EmailPreferences> {
+  const current = await getEmailPreferences(db, userId);
+  const next: EmailPreferences = { ...current, ...patch };
+  await db
+    .prepare(
+      `INSERT INTO email_preferences (user_id, product_updates, service_announcements, billing, updated_at)
+       VALUES (?, ?, ?, ?, datetime('now'))
+       ON CONFLICT(user_id) DO UPDATE SET
+         product_updates = excluded.product_updates,
+         service_announcements = excluded.service_announcements,
+         billing = excluded.billing,
+         updated_at = excluded.updated_at`,
+    )
+    .bind(userId, next.productUpdates ? 1 : 0, next.serviceAnnouncements ? 1 : 0, next.billing ? 1 : 0)
+    .run();
+  return next;
 }
