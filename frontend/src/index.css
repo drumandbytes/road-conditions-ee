@@ -177,13 +177,17 @@ body,
   justify-content: center;
 }
 
-/* Mirrors .info-button on the opposite corner — a separate, lightweight control rather than
-   part of the info-overlay flow, since toggling a layer should be a one-tap action, not a
-   detour through the tabs/legend-descriptions/about-link panel. */
+/* Top-left — the one map corner nothing else occupies: top-right is MapLibre's own
+   zoom/geolocate controls, bottom-left is .info-button, and bottom-right is MapLibre's default
+   attribution control (confirmed this exact spot collides with it — attribution stays
+   variable-width/height depending on its own expanded/collapsed state, so "just add more
+   margin" isn't reliable the way a genuinely free corner is). A separate, lightweight control
+   rather than part of the info-overlay flow, since toggling a layer should be a one-tap
+   action, not a detour through the tabs/legend-descriptions/about-link panel. */
 .layer-menu {
   position: absolute;
-  bottom: 1rem;
-  right: 1rem;
+  top: 1rem;
+  left: 1rem;
   z-index: 10;
 }
 
@@ -212,8 +216,8 @@ body,
 
 .layer-menu-popover {
   position: absolute;
-  bottom: calc(100% + 0.5rem);
-  right: 0;
+  top: calc(100% + 0.5rem);
+  left: 0;
   z-index: 15;
   min-width: 190px;
   background: var(--color-bg);
