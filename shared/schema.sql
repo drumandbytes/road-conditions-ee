@@ -17,6 +17,24 @@ CREATE TABLE users (
 -- ON CONFLICT(stripe_customer_id) upsert in api-worker's checkout/webhook handlers.
 CREATE UNIQUE INDEX idx_users_stripe_customer_id ON users(stripe_customer_id);
 
+-- Magic-link sign-in — lets an already-paying user authenticate a *second* device with the
+-- same account (the bearer_token itself is never emailed or re-shown after checkout; this is
+-- the only other way to retrieve it). token is a random opaque string, single-use (used_at)
+-- and short-lived (expires_at, see api-worker's auth.ts LOGIN_TOKEN_TTL_MINUTES) — a stolen or
+-- forwarded login email can only be replayed within that window and exactly once.
+CREATE TABLE login_tokens (
+  token TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  expires_at TEXT NOT NULL,
+  used_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+-- Used both to fetch a user's outstanding tokens (none, in practice — verify deletes/consumes
+-- them) and to rate-limit how many login emails one account can trigger in a short window
+-- (see handleRequestLogin) — a write to this table happens on every /api/login call, so this
+-- index earns its keep on the read side too, not just theoretical future use.
+CREATE INDEX idx_login_tokens_user_created ON login_tokens(user_id, created_at);
+
 CREATE TABLE push_subscriptions (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,

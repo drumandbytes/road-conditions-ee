@@ -180,5 +180,14 @@
     "categoryCompleteClosureExample": "Tee on täielikult suletud",
     "categoryOtherLabel": "Muu piirang",
     "categoryOtherExample": "Muu tüüpi piirang"
+  },
+  "signIn": {
+    "toggleLink": "Juba tellinud? Logi sellel seadmel sisse",
+    "backLink": "Tagasi",
+    "emailPlaceholder": "sina@näide.ee",
+    "submitButton": "Saada sisselogimislink",
+    "sending": "Saatmine…",
+    "sentMessage": "Kontrolli oma e-posti sisselogimislingi jaoks — link kehtib 15 minutit.",
+    "error": "Sisselogimislingi saatmine ebaõnnestus. Proovi uuesti."
   }
 }

@@ -3,6 +3,8 @@ import { BEARER_TOKEN_CHANGED_EVENT, getAccountStatus, startCheckout, startPorta
 import type { AccountStatus, Plan } from "../lib/api";
 import { SavedPointsSection } from "./SavedPointsSection";
 import type { SavedPointsSectionT } from "./SavedPointsSection";
+import { SignInForm } from "./SignInForm";
+import type { SignInFormT } from "./SignInForm";
 
 type LoadState =
   | { status: "loading" }
@@ -30,6 +32,7 @@ interface AccountPanelProps {
       error: string;
     };
     savedPoints: SavedPointsSectionT;
+    signIn: SignInFormT;
   };
   savedPointsRefreshKey: number;
   onAddSavedPoint: () => void;
@@ -126,6 +129,7 @@ export function AccountPanel({ t, savedPointsRefreshKey, onAddSavedPoint }: Acco
             ))}
           </div>
           <p class="account-trial-note">{t.account.trialNote}</p>
+          <SignInForm t={t.signIn} />
         </>
       )}
 

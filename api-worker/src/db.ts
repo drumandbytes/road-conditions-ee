@@ -280,3 +280,58 @@ export async function updateSubscriptionStatusByStripeCustomerId(
     .bind(subscriptionStatus, stripeCustomerId)
     .run();
 }
+
+export async function getUserByEmail(db: D1Database, email: string): Promise<UserRow | null> {
+  const row = await db.prepare("SELECT * FROM users WHERE email = ?").bind(email).first<UserRow>();
+  return row ?? null;
+}
+
+/** How many login tokens this user has had issued in the last `windowMinutes` — used to cap
+ *  how many sign-in emails one account can trigger in a short window (see
+ *  handleRequestLogin), independent of whether those tokens were ever used. */
+export async function countRecentLoginTokens(
+  db: D1Database,
+  userId: string,
+  windowMinutes: number,
+): Promise<number> {
+  const row = await db
+    .prepare(
+      `SELECT COUNT(*) AS n FROM login_tokens WHERE user_id = ? AND created_at > datetime('now', ?)`,
+    )
+    .bind(userId, `-${windowMinutes} minutes`)
+    .first<{ n: number }>();
+  return row?.n ?? 0;
+}
+
+export async function createLoginToken(
+  db: D1Database,
+  userId: string,
+  expiresInMinutes: number,
+): Promise<string> {
+  const token = randomHex(32);
+  await db
+    .prepare(`INSERT INTO login_tokens (token, user_id, expires_at) VALUES (?, ?, datetime('now', ?))`)
+    .bind(token, userId, `+${expiresInMinutes} minutes`)
+    .run();
+  return token;
+}
+
+/** Atomically consumes a login token — the UPDATE's own WHERE clause (not a separate
+ *  check-then-use) is what makes this safe against the same token being submitted twice
+ *  concurrently: only the first request's UPDATE can affect a row, since the second runs
+ *  against a row that's already used_at-stamped. Returns the associated user only if the
+ *  token existed, was unused, and hasn't expired. */
+export async function consumeLoginToken(db: D1Database, token: string): Promise<UserRow | null> {
+  const row = await db
+    .prepare(
+      `UPDATE login_tokens SET used_at = datetime('now')
+       WHERE token = ? AND used_at IS NULL AND expires_at > datetime('now')
+       RETURNING user_id`,
+    )
+    .bind(token)
+    .first<{ user_id: string }>();
+  if (!row) return null;
+
+  const user = await db.prepare("SELECT * FROM users WHERE id = ?").bind(row.user_id).first<UserRow>();
+  return user ?? null;
+}

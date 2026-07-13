@@ -4,6 +4,7 @@ import { handleCameraImage, handleCameras } from "../src/routes/cameras";
 import { handleGeocode } from "../src/routes/geocode";
 import { handleHazards } from "../src/routes/hazards";
 import { handlePushSubscription } from "../src/routes/push-subscription";
+import { handleRequestLogin, handleVerifyLogin } from "../src/routes/login";
 import { handleRestrictions } from "../src/routes/restrictions";
 import { handleVms } from "../src/routes/vms";
 import { handleWeatherStationHistory } from "../src/routes/weather-history";
@@ -685,5 +686,110 @@ describe("handlePushSubscription", () => {
     expect(res.status).toBe(204);
     expect(calls[0][0]).toBe("u1");
     expect(calls[0][1]).toBe("https://push.example.com/abc");
+  });
+});
+
+/** Returns canned responses to successive `db.prepare(...).bind(...).first()/.run()` calls,
+ *  in the exact order the handler under test is expected to make them — simpler than teaching
+ *  a fake to parse SQL text when the call sequence for a given handler is fixed and known. */
+function sequentialDb(responses: Array<{ first?: unknown; run?: unknown }>): D1Database {
+  let i = 0;
+  return {
+    prepare: () => {
+      const response = responses[i++] ?? {};
+      return {
+        bind: () => ({
+          first: async () => response.first ?? null,
+          run: async () => response.run ?? { success: true, meta: {} },
+        }),
+      };
+    },
+  } as unknown as D1Database;
+}
+
+function fakeEmail() {
+  return { send: vi.fn().mockResolvedValue({}) };
+}
+
+describe("handleRequestLogin", () => {
+  function loginRequest(body: unknown): Request {
+    return new Request("https://example.com/api/login", { method: "POST", body: JSON.stringify(body) });
+  }
+
+  it("rejects an invalid email without touching the db", async () => {
+    const res = await handleRequestLogin(loginRequest({ email: "not-an-email" }), {
+      DB: sequentialDb([]),
+      EMAIL: fakeEmail() as unknown as SendEmail,
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("responds ok without sending mail when the email matches no account", async () => {
+    const email = fakeEmail();
+    const res = await handleRequestLogin(loginRequest({ email: "nobody@example.com" }), {
+      DB: sequentialDb([{ first: null }]), // getUserByEmail -> not found
+      EMAIL: email as unknown as SendEmail,
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+    expect(email.send).not.toHaveBeenCalled();
+  });
+
+  it("sends a sign-in email when the account exists and is under the rate limit", async () => {
+    const email = fakeEmail();
+    const res = await handleRequestLogin(loginRequest({ email: "a@b.com" }), {
+      DB: sequentialDb([
+        { first: { id: "u1", email: "a@b.com", bearer_token: "tok" } }, // getUserByEmail
+        { first: { n: 0 } }, // countRecentLoginTokens
+        { run: { success: true } }, // createLoginToken's INSERT
+      ]),
+      EMAIL: email as unknown as SendEmail,
+    });
+    expect(res.status).toBe(200);
+    expect(email.send).toHaveBeenCalledTimes(1);
+    const [sent] = email.send.mock.calls[0];
+    expect(sent.to).toBe("a@b.com");
+    expect(sent.from).toEqual({ email: "noreply@drumandbytes.ee", name: "Teeolud" });
+  });
+
+  it("responds ok but skips sending once the rate limit is hit", async () => {
+    const email = fakeEmail();
+    const res = await handleRequestLogin(loginRequest({ email: "a@b.com" }), {
+      DB: sequentialDb([
+        { first: { id: "u1", email: "a@b.com", bearer_token: "tok" } }, // getUserByEmail
+        { first: { n: 3 } }, // countRecentLoginTokens — at the cap
+      ]),
+      EMAIL: email as unknown as SendEmail,
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+    expect(email.send).not.toHaveBeenCalled();
+  });
+});
+
+describe("handleVerifyLogin", () => {
+  it("requires a token", async () => {
+    const res = await handleVerifyLogin(new Request("https://example.com/api/login/verify"), sequentialDb([]));
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects an invalid, expired, or already-used token", async () => {
+    const res = await handleVerifyLogin(
+      new Request("https://example.com/api/login/verify?token=bad"),
+      sequentialDb([{ first: null }]), // consumeLoginToken's UPDATE...RETURNING affects no row
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("exchanges a valid token for the account's existing bearer_token", async () => {
+    const res = await handleVerifyLogin(
+      new Request("https://example.com/api/login/verify?token=good"),
+      sequentialDb([
+        { first: { user_id: "u1" } }, // consumeLoginToken's UPDATE...RETURNING
+        { first: { id: "u1", bearer_token: "existing-tok" } }, // the SELECT users WHERE id = ?
+      ]),
+    );
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ bearerToken: "existing-tok" });
   });
 });

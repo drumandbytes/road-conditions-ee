@@ -9,7 +9,7 @@ import { SavedPointEditor } from "./components/SavedPointEditor";
 import { ThemeToggle } from "./components/ThemeToggle";
 import type { Locale } from "./components/InfoPanel";
 import type { Theme } from "./components/ThemeToggle";
-import { completeCheckoutSession, setBearerToken } from "./lib/api";
+import { completeCheckoutSession, completeLogin, setBearerToken } from "./lib/api";
 import et from "./i18n/et.json";
 import en from "./i18n/en.json";
 
@@ -138,6 +138,22 @@ export function App() {
     } else {
       cleanUp();
     }
+  }, []);
+
+  // Same shape as the checkout-completion effect above, for the other way a device gets a
+  // bearer_token: clicking a magic sign-in link (see AccountPanel's sign-in form and
+  // api-worker's login.ts). Cleans up the query param either way so a refresh doesn't retry a
+  // token that's already been consumed (login tokens are single-use).
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const loginToken = params.get("login_token");
+    if (!loginToken) return;
+
+    const cleanUp = () => window.history.replaceState({}, "", window.location.pathname);
+    completeLogin(loginToken)
+      .then((token) => setBearerToken(token))
+      .catch((err) => console.error("Failed to complete sign-in", err))
+      .finally(cleanUp);
   }, []);
 
   return (

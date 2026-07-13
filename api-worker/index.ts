@@ -4,6 +4,7 @@ import { handleCameraImage, handleCameras } from "./src/routes/cameras";
 import { handleCheckout, handleCheckoutSession, handlePortal } from "./src/routes/checkout";
 import { handleGeocode } from "./src/routes/geocode";
 import { handleHazards } from "./src/routes/hazards";
+import { handleRequestLogin, handleVerifyLogin } from "./src/routes/login";
 import { handlePushSubscription } from "./src/routes/push-subscription";
 import { handleRestrictions } from "./src/routes/restrictions";
 import { handleStripeWebhook } from "./src/routes/stripe-webhook";
@@ -14,6 +15,7 @@ import { handleWeatherStationHistory } from "./src/routes/weather-history";
 
 interface Env {
   DB: D1Database;
+  EMAIL: SendEmail;
   STRIPE_SECRET_KEY?: string;
   STRIPE_WEBHOOK_SECRET?: string;
 }
@@ -54,6 +56,12 @@ async function route(request: Request, env: Env): Promise<Response> {
   }
   if (method === "GET" && pathname === "/api/geocode") {
     return handleGeocode(request);
+  }
+  if (method === "POST" && pathname === "/api/login") {
+    return handleRequestLogin(request, env);
+  }
+  if (method === "GET" && pathname === "/api/login/verify") {
+    return handleVerifyLogin(request, env.DB);
   }
 
   // Paid-gated routes.

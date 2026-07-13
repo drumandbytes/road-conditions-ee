@@ -180,5 +180,14 @@
     "categoryCompleteClosureExample": "The road is fully closed",
     "categoryOtherLabel": "Other restriction",
     "categoryOtherExample": "Some other kind of restriction"
+  },
+  "signIn": {
+    "toggleLink": "Already subscribed? Sign in on this device",
+    "backLink": "Back",
+    "emailPlaceholder": "you@example.com",
+    "submitButton": "Send sign-in link",
+    "sending": "Sending…",
+    "sentMessage": "Check your email for a sign-in link — it's valid for 15 minutes.",
+    "error": "Couldn't send the sign-in link. Try again."
   }
 }

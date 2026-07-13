@@ -116,6 +116,26 @@ export async function startPortalSession(): Promise<string> {
   return body.url;
 }
 
+/** Requests a magic sign-in link for an already-paying account on a *new* device. Always
+ *  resolves (never throws on a "no such account" case) — the backend deliberately responds
+ *  the same way regardless of whether the email matched anything, see api-worker's
+ *  handleRequestLogin, so the frontend has nothing more specific to report either. */
+export async function requestLogin(email: string): Promise<void> {
+  const res = await apiFetch("/api/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+  if (!res.ok) throw new Error("Failed to request a sign-in link");
+}
+
+export async function completeLogin(token: string): Promise<string> {
+  const res = await apiFetch(`/api/login/verify?token=${encodeURIComponent(token)}`);
+  const body = (await res.json()) as { bearerToken?: string; error?: string };
+  if (!body.bearerToken) throw new Error(body.error ?? "Invalid or expired sign-in link");
+  return body.bearerToken;
+}
+
 export interface GeocodeCandidate {
   label: string;
   lat: number;

@@ -11,5 +11,11 @@ binding = "DB"
 database_name = "road-conditions"
 database_id = "b4a456a7-c3f3-4a1e-95e5-4a8b7af4deb1"
 
+# Magic-link sign-in emails (src/routes/login.ts) — requires drumandbytes.ee to be onboarded
+# onto Cloudflare Email Sending first (`wrangler email sending enable drumandbytes.ee`), or
+# every send just fails at Cloudflare's end with the binding still working fine locally/in CI.
+[[send_email]]
+name = "EMAIL"
+
 # TODO Phase 5: add [[routes]] once the frontend/API domain split is decided
 # (see "Domain" open question in the plan). Deploys to *.workers.dev until then.

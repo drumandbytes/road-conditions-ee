@@ -2,6 +2,7 @@ import { useState } from "preact/hooks";
 import { AccountPanel } from "./AccountPanel";
 import type { LayerId } from "./Map";
 import type { SavedPointsSectionT } from "./SavedPointsSection";
+import type { SignInFormT } from "./SignInForm";
 
 const COFFEE_LINK = "https://buymeacoffee.com/justmaris";
 
@@ -71,6 +72,7 @@ interface InfoPanelProps {
       error: string;
     };
     savedPoints: SavedPointsSectionT;
+    signIn: SignInFormT;
   };
   locale: Locale;
   onLocaleChange: (locale: Locale) => void;
