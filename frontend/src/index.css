@@ -662,18 +662,59 @@ body,
   text-align: center;
 }
 
+.weather-history-modal {
+  width: min(90vw, 480px);
+}
+
+.weather-history-chart {
+  margin-bottom: 0.75rem;
+}
+
+.weather-history-chart-legend {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 0.4rem;
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+}
+
+.weather-history-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.weather-history-legend-swatch {
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.weather-history-chart-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.weather-history-chart-gridline {
+  stroke: var(--color-border);
+  stroke-width: 1;
+}
+
+.weather-history-chart-axis-label {
+  fill: var(--color-text-secondary);
+  font-size: 9px;
+}
+
 .weather-history-list {
   list-style: none;
-  min-width: 260px;
-  max-width: 320px;
-  max-height: 60vh;
+  width: 100%;
+  max-height: 45vh;
   overflow-y: auto;
 }
 
 .weather-history-row {
-  display: flex;
-  justify-content: space-between;
-  gap: 0.75rem;
   padding: 0.5rem 0;
   border-bottom: 1px solid var(--color-border);
   font-size: 0.85rem;
@@ -683,13 +724,20 @@ body,
   border-bottom: none;
 }
 
-.weather-history-time {
+.weather-history-row-time {
   color: var(--color-text-secondary);
-  white-space: nowrap;
+  font-size: 0.8rem;
+  margin-bottom: 0.3rem;
 }
 
-.weather-history-summary {
-  text-align: right;
+.weather-history-row-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 0.6rem;
+}
+
+.weather-history-field {
+  white-space: nowrap;
 }
 
 .account-header {
