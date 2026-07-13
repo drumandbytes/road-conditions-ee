@@ -358,7 +358,7 @@ function buildVmsPopupHtml(properties: Record<string, unknown>, locale: Locale, 
 }
 
 
-interface MarkerLabelsT {
+export interface MarkerLabelsT {
   weatherStations: string;
   cameras: string;
   hazards: string;

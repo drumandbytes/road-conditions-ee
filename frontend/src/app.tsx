@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "preact/hooks";
 import { Map, LAYER_IDS } from "./components/Map";
 import type { LayerId } from "./components/Map";
 import { InfoPanel } from "./components/InfoPanel";
+import { LayerMenu } from "./components/LayerMenu";
 import { CameraModal } from "./components/CameraModal";
 import { WeatherHistoryModal } from "./components/WeatherHistoryModal";
 import { SavedPointEditor } from "./components/SavedPointEditor";
@@ -168,6 +169,10 @@ export function App() {
           setInfoOpen(false);
           setPinDraft(DEFAULT_PIN);
         }}
+      />
+      <LayerMenu
+        openButtonLabel={t.layerMenu.openButton}
+        markerLabelsT={markerLabelsT}
         visibleLayers={visibleLayers}
         onToggleLayer={(id, visible) => setVisibleLayers((current) => ({ ...current, [id]: visible }))}
       />

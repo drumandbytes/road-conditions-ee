@@ -1,9 +1,7 @@
 {
   "appName": "Road Conditions",
-  "layers": {
-    "weatherStations": "Weather stations",
-    "cameras": "Road cameras",
-    "hazards": "Hazards"
+  "layerMenu": {
+    "openButton": "Map layers"
   },
   "attribution": "Data: Transpordiamet (Tark Tee). Map: OpenStreetMap contributors.",
   "theme": {

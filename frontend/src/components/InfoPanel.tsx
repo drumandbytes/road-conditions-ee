@@ -78,8 +78,6 @@ interface InfoPanelProps {
   onOpenChange: (open: boolean) => void;
   savedPointsRefreshKey: number;
   onAddSavedPoint: () => void;
-  visibleLayers: Record<LayerId, boolean>;
-  onToggleLayer: (id: LayerId, visible: boolean) => void;
 }
 
 export function InfoPanel({
@@ -90,8 +88,6 @@ export function InfoPanel({
   onOpenChange,
   savedPointsRefreshKey,
   onAddSavedPoint,
-  visibleLayers,
-  onToggleLayer,
 }: InfoPanelProps) {
   const [tab, setTab] = useState<Tab>("info");
   const [showAbout, setShowAbout] = useState(false);
@@ -179,13 +175,6 @@ export function InfoPanel({
                             <span class="legend-item-title">{t.info[row.titleKey]}</span>
                             <span class="legend-desc">{t.info[row.descKey]}</span>
                           </span>
-                          <input
-                            type="checkbox"
-                            class="legend-toggle"
-                            checked={visibleLayers[row.id] !== false}
-                            aria-label={t.info[row.titleKey]}
-                            onChange={(e) => onToggleLayer(row.id, (e.target as HTMLInputElement).checked)}
-                          />
                         </li>
                       ))}
                     </ul>

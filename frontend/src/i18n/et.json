@@ -1,9 +1,7 @@
 {
   "appName": "Teeolud",
-  "layers": {
-    "weatherStations": "Ilmajaamad",
-    "cameras": "Teekaamerad",
-    "hazards": "Liiklusohud"
+  "layerMenu": {
+    "openButton": "Kaardikihid"
   },
   "attribution": "Andmed: Transpordiamet (Tark Tee). Kaart: OpenStreetMap panustajad.",
   "theme": {
