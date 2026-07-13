@@ -30,18 +30,33 @@ export async function hasActivePushSubscription(): Promise<boolean> {
   return subscription !== null;
 }
 
+// Brave ships Chromium's Push API but disables the underlying Google push service by
+// default (Settings > Privacy > "Use Google services for push messaging") — permission
+// prompts and grants normally, but pushManager.subscribe() then fails. navigator.brave is
+// Brave's own (unofficial but stable, widely relied upon) self-identification API.
+async function isBraveBrowser(): Promise<boolean> {
+  const brave = (navigator as Navigator & { brave?: { isBrave: () => Promise<boolean> } }).brave;
+  if (!brave) return false;
+  try {
+    return await brave.isBrave();
+  } catch {
+    return false;
+  }
+}
+
+export type EnablePushResult = "ok" | "denied" | "brave-blocked" | "error";
+
 /** Requests notification permission (must be called from an explicit user action, e.g. a
  *  button click — never on page load) and, if granted, subscribes to push and registers the
- *  subscription with the backend. Returns false on any failure (permission denied, subscribe
- *  failed, registration failed) without throwing — callers show one generic error state
- *  either way, since the specific reason isn't actionable for the user. iOS Safari requires
- *  the PWA to be installed to the home screen before push permission is even offered — a UX
- *  step to surface elsewhere, not something this function can detect or work around. */
-export async function enablePushNotifications(): Promise<boolean> {
-  if (!pushSupported()) return false;
+ *  subscription with the backend. Doesn't throw — callers switch on the result to show the
+ *  right state. iOS Safari requires the PWA to be installed to the home screen before push
+ *  permission is even offered — a UX step to surface elsewhere, not something this function
+ *  can detect or work around. */
+export async function enablePushNotifications(): Promise<EnablePushResult> {
+  if (!pushSupported()) return "error";
 
   const permission = await Notification.requestPermission();
-  if (permission !== "granted") return false;
+  if (permission !== "granted") return "denied";
 
   try {
     const registration = await navigator.serviceWorker.ready;
@@ -54,14 +69,14 @@ export async function enablePushNotifications(): Promise<boolean> {
       applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY!) as BufferSource,
     });
     const json = subscription.toJSON();
-    if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) return false;
+    if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) return "error";
     await registerPushSubscription({
       endpoint: json.endpoint,
       keys: { p256dh: json.keys.p256dh, auth: json.keys.auth },
     });
-    return true;
+    return "ok";
   } catch (err) {
     console.error("Failed to enable push notifications", err);
-    return false;
+    return (await isBraveBrowser()) ? "brave-blocked" : "error";
   }
 }

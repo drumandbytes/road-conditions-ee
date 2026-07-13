@@ -3,7 +3,7 @@ import { deleteSavedPoint, getSavedPoints } from "../lib/api";
 import type { SavedPoint } from "../lib/api";
 import { enablePushNotifications, hasActivePushSubscription, pushSupported } from "../lib/push";
 
-type PushStatus = "checking" | "unsupported" | "off" | "on" | "denied" | "error";
+type PushStatus = "checking" | "unsupported" | "off" | "on" | "denied" | "error" | "brave-blocked";
 
 export interface SavedPointsSectionT {
   title: string;
@@ -19,6 +19,7 @@ export interface SavedPointsSectionT {
   pushDenied: string;
   pushUnsupported: string;
   pushEnableError: string;
+  pushEnableErrorBrave: string;
 }
 
 interface SavedPointsSectionProps {
@@ -79,13 +80,9 @@ export function SavedPointsSection({ t, refreshKey, onAddSavedPoint }: SavedPoin
 
   async function onEnablePush() {
     setEnabling(true);
-    const ok = await enablePushNotifications();
+    const result = await enablePushNotifications();
     setEnabling(false);
-    if (ok) {
-      setPushStatus("on");
-    } else {
-      setPushStatus(Notification.permission === "denied" ? "denied" : "error");
-    }
+    setPushStatus(result === "ok" ? "on" : result);
   }
 
   return (
@@ -95,7 +92,10 @@ export function SavedPointsSection({ t, refreshKey, onAddSavedPoint }: SavedPoin
       {pushStatus === "denied" && <p class="account-trial-note">{t.pushDenied}</p>}
       {pushStatus === "on" && <p class="account-trial-note">{t.pushEnabled}</p>}
       {pushStatus === "error" && <p class="account-alert account-alert-error">{t.pushEnableError}</p>}
-      {(pushStatus === "off" || pushStatus === "error") && (
+      {pushStatus === "brave-blocked" && (
+        <p class="account-alert account-alert-error">{t.pushEnableErrorBrave}</p>
+      )}
+      {(pushStatus === "off" || pushStatus === "error" || pushStatus === "brave-blocked") && (
         <button type="button" class="account-button" onClick={onEnablePush} disabled={enabling}>
           {enabling ? t.pushEnabling : t.pushEnableButton}
         </button>

@@ -141,6 +141,7 @@
     "pushDenied": "Notifications are blocked in your browser settings.",
     "pushUnsupported": "Push notifications aren't supported in this browser.",
     "pushEnableError": "Couldn't enable notifications. Try again.",
+    "pushEnableErrorBrave": "Brave blocks push notifications by default. Go to brave://settings/privacy and turn on \"Use Google services for push messaging\", then try again.",
     "addTitle": "Add a location",
     "placingInstructions": "Search for an address or drag the pin to the exact spot.",
     "searchPlaceholder": "Search for an address",

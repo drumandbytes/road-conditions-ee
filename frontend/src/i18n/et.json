@@ -141,6 +141,7 @@
     "pushDenied": "Teavitused on brauseri seadetes blokeeritud.",
     "pushUnsupported": "Push-teavitused pole selles brauseris toetatud.",
     "pushEnableError": "Teavituste lubamine ebaõnnestus. Proovi uuesti.",
+    "pushEnableErrorBrave": "Brave blokeerib vaikimisi push-teavitused. Ava brave://settings/privacy ja lülita sisse \"Use Google services for push messaging\", seejärel proovi uuesti.",
     "addTitle": "Lisa asukoht",
     "placingInstructions": "Otsi aadressi või lohista märgistus täpsele asukohale.",
     "searchPlaceholder": "Otsi aadressi",
