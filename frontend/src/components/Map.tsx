@@ -879,17 +879,23 @@ export function Map({
         onPinDragEndRef.current(lngLat.lat, lngLat.lng);
       });
       pinMarkerRef.current = marker;
-      map.flyTo({ center: [pinDraft.lng, pinDraft.lat], zoom: Math.max(map.getZoom(), 12) });
+      // easeTo, not flyTo — flyTo's cinematic curve zooms *out* further before zooming back in
+      // on a big zoom delta (whole-Estonia view down to street level is a ~5-6 level jump),
+      // which sweeps through extra zoom levels and fetches tiles for all of them just to
+      // discard them moments later. easeTo animates zoom/position directly, crossing only the
+      // levels actually between start and end, so there's less to fetch and less blank/gray
+      // tile flash while it's in flight.
+      map.easeTo({ center: [pinDraft.lng, pinDraft.lat], zoom: Math.max(map.getZoom(), 12) });
       return;
     }
 
-    // Only reposition/fly for an externally-driven change (a search result) — the dragend
-    // handler above already fed this exact position back into pinDraft, so re-flying on that
+    // Only reposition/ease for an externally-driven change (a search result) — the dragend
+    // handler above already fed this exact position back into pinDraft, so re-easing on that
     // echo would fight the user's own drag gesture.
     const current = pinMarkerRef.current.getLngLat();
     if (Math.abs(current.lat - pinDraft.lat) > 1e-9 || Math.abs(current.lng - pinDraft.lng) > 1e-9) {
       pinMarkerRef.current.setLngLat([pinDraft.lng, pinDraft.lat]);
-      map.flyTo({ center: [pinDraft.lng, pinDraft.lat], zoom: Math.max(map.getZoom(), 14) });
+      map.easeTo({ center: [pinDraft.lng, pinDraft.lat], zoom: Math.max(map.getZoom(), 14) });
     }
   }, [pinDraft]);
 
