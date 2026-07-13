@@ -20,6 +20,14 @@ const CLUSTER_LAYER_PAINT = {
   vms: "#16a085",
 } as const;
 
+// Most VMS signs display a routine, unchanging speed limit (110/120/90 km/h — the normal
+// posted limit for that stretch, not a restriction) rather than an active warning — confirmed
+// directly against production data (122 of 150 signs have a speed_limit set, but only 12 have
+// an actual warning). Full teal would make the layer read as "122 things worth your attention"
+// when almost none of them are. Signs with no warning get this muted grey instead; only a real
+// warning gets the normal teal — see addClusteredSource's pointColor param.
+const VMS_MUTED_COLOR = "#8a8f94";
+
 // One small white glyph per marker type, layered on top of its colored circle — plain
 // same-size dots in three colors read as arbitrary at a glance, especially for anyone who
 // hasn't memorized the legend. Camera and hazard icons cut their inner detail (lens, "!")
@@ -341,6 +349,14 @@ function buildVmsPopupHtml(properties: Record<string, unknown>, locale: Locale, 
   `;
 }
 
+// Most VMS signs are blank at any given moment — same "has anything to show" check as
+// buildVmsPopupHtml's rows above, applied before a sign is even added to the map (see the
+// VMS fetch in the load handler below), not just at popup-render time.
+function hasActiveVmsContent(feature: GeoJSON.Feature): boolean {
+  const properties = feature.properties ?? {};
+  return typeof properties.speedLimit === "number" || Boolean(properties.warning);
+}
+
 interface MarkerLabelsT {
   weatherStations: string;
   cameras: string;
@@ -349,7 +365,16 @@ interface MarkerLabelsT {
   vms: string;
 }
 
-function addClusteredSource(map: maplibregl.Map, id: keyof typeof CLUSTER_LAYER_PAINT, data: GeoJSON.FeatureCollection) {
+function addClusteredSource(
+  map: maplibregl.Map,
+  id: keyof typeof CLUSTER_LAYER_PAINT,
+  data: GeoJSON.FeatureCollection,
+  // Individual points can override the flat per-layer color with a data-driven expression
+  // (currently only vms does, to grey out routine-limit-only signs) — clusters always stay
+  // the flat color regardless, since a cluster mixes points and can't meaningfully represent
+  // "some of these are muted."
+  pointColor: string | maplibregl.ExpressionSpecification = CLUSTER_LAYER_PAINT[id],
+) {
   map.addSource(id, { type: "geojson", data, cluster: true, clusterMaxZoom: 14, clusterRadius: 50 });
 
   map.addLayer({
@@ -387,7 +412,7 @@ function addClusteredSource(map: maplibregl.Map, id: keyof typeof CLUSTER_LAYER_
     source: id,
     filter: ["!", ["has", "point_count"]],
     paint: {
-      "circle-color": CLUSTER_LAYER_PAINT[id],
+      "circle-color": pointColor,
       // Bumped from the original 6px — a legible icon on top needs a bit more room than a
       // plain color dot did.
       "circle-radius": 9,
@@ -681,7 +706,21 @@ export function Map({
               })
               .then((vms) => {
                 if (vms) {
-                  addClusteredSource(map!, "vms", vms);
+                  // Fully blank signs (no speed limit, no warning — confirmed ~28 of 150 in
+                  // production) are dropped entirely; nothing to show. The remaining signs
+                  // mostly display a routine, unchanging speed limit rather than an actual
+                  // warning (confirmed: 122 have a speed_limit set, but only 12 have a
+                  // warning) — those get VMS_MUTED_COLOR via pointColor below rather than
+                  // full teal, so a real warning still stands out. Deliberately not a
+                  // user-facing layer toggle (more UI surface for a problem this solves more
+                  // simply) — see VMS_MUTED_COLOR's comment.
+                  const activeVms = { ...vms, features: vms.features.filter(hasActiveVmsContent) };
+                  addClusteredSource(map!, "vms", activeVms, [
+                    "case",
+                    ["==", ["get", "warning"], null],
+                    VMS_MUTED_COLOR,
+                    CLUSTER_LAYER_PAINT.vms,
+                  ]);
                   addedLayerIds.push("vms");
                 }
                 setupPointClickHandling(
