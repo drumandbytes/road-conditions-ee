@@ -5,6 +5,7 @@ import { handleGeocode } from "../src/routes/geocode";
 import { handleHazards } from "../src/routes/hazards";
 import { handlePushSubscription } from "../src/routes/push-subscription";
 import { handleRestrictions } from "../src/routes/restrictions";
+import { handleVms } from "../src/routes/vms";
 import { handleWeatherStationHistory } from "../src/routes/weather-history";
 import { handleListSavedPoints, handleSubscribe, handleUnsubscribe } from "../src/routes/subscribe";
 import { handleCheckout, handleCheckoutSession, handlePortal } from "../src/routes/checkout";
@@ -78,6 +79,47 @@ describe("handleRestrictions", () => {
     expect(body.features[0].properties.cause).toBe("PAVING");
     expect(body.features[0].properties.extraInfoEn).toBe("Speed limited to 30 km/h.");
     expect(body.features[0].properties.detourDescription).toBe("Ümbersõit on korraldatud Kose mnt kaudu.");
+  });
+});
+
+describe("handleVms", () => {
+  const signRow = {
+    sign_id: 1001010521, road_nr: 1, road_name: "Tallinna-Narva tee", road_km: 10.5, angle: 248,
+    speed_limit: 70, speed_limit_changed_at: "2026-07-10T13:38:14.000Z",
+    warning: null, warning_changed_at: null, lat: 59.445, lng: 24.918,
+  };
+  const vmsUser: UserRow = {
+    id: "u1", email: "a@b.com", stripe_customer_id: "cus_1", subscription_status: "active", bearer_token: "tok",
+  };
+
+  it("returns location + road context only for a free/unauthenticated caller, no live content", async () => {
+    const res = await handleVms(fakeDb([signRow]), null);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { features: Array<{ properties: Record<string, unknown> }> };
+    expect(body.features[0].properties).toEqual({
+      id: 1001010521,
+      roadName: "Tallinna-Narva tee",
+      roadKm: 10.5,
+      paid: false,
+    });
+  });
+
+  it("returns full live content for an authenticated paid caller", async () => {
+    const res = await handleVms(fakeDb([signRow]), vmsUser);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { features: Array<{ properties: Record<string, unknown> }> };
+    expect(body.features[0].properties).toEqual({
+      id: 1001010521,
+      roadNr: 1,
+      roadName: "Tallinna-Narva tee",
+      roadKm: 10.5,
+      angle: 248,
+      speedLimit: 70,
+      speedLimitChangedAt: "2026-07-10T13:38:14.000Z",
+      warning: null,
+      warningChangedAt: null,
+      paid: true,
+    });
   });
 });
 

@@ -63,7 +63,8 @@
     "vmsRoad": "Road sign",
     "vmsSpeedLimit": "Speed limit",
     "vmsWarning": "Warning",
-    "vmsNoActive": "Nothing currently displayed"
+    "vmsNoActive": "Nothing currently displayed",
+    "vmsPaywalled": "Live sign content is a paid feature. Open the ⓘ menu to subscribe."
   },
   "info": {
     "openButton": "Menu",
@@ -85,7 +86,7 @@
     "legendRestrictionsTitle": "Roadworks & restrictions",
     "legendRestrictionsDesc": "Tap for details on closures, speed limits, and ongoing works.",
     "legendVmsTitle": "Electronic road signs",
-    "legendVmsDesc": "Live speed limits and warnings from electronic signs — a paid feature.",
+    "legendVmsDesc": "Tap for the sign's location. Viewing its live speed limit or warning is a paid feature.",
     "legendClusters": "Numbered circles are clusters of nearby markers — tap one to zoom in.",
     "howToTitle": "How to use",
     "howTo1": "Pinch or scroll to zoom, drag to pan.",

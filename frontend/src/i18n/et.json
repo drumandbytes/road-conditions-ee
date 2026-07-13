@@ -63,7 +63,8 @@
     "vmsRoad": "Teabetahvel",
     "vmsSpeedLimit": "Kiiruspiirang",
     "vmsWarning": "Hoiatus",
-    "vmsNoActive": "Hetkel midagi ei kuvata"
+    "vmsNoActive": "Hetkel midagi ei kuvata",
+    "vmsPaywalled": "Reaalajas teave on tasuline funktsioon. Tellimiseks ava ⓘ menüü."
   },
   "info": {
     "openButton": "Menüü",
@@ -85,7 +86,7 @@
     "legendRestrictionsTitle": "Teetööd ja piirangud",
     "legendRestrictionsDesc": "Puuduta sulgemiste, kiiruspiirangute ja käimasolevate tööde üksikasjade nägemiseks.",
     "legendVmsTitle": "Muutuv-teabega liiklusmärgid",
-    "legendVmsDesc": "Muutuvmärkide reaalajas kiiruspiirangud ja hoiatused — tasuline funktsioon.",
+    "legendVmsDesc": "Puuduta märgi asukoha nägemiseks. Reaalajas kiiruspiirangu või hoiatuse vaatamine on tasuline funktsioon.",
     "legendClusters": "Numbriga ringid on lähestikuste märkide kobarad — puuduta suurendamiseks.",
     "howToTitle": "Kuidas kasutada",
     "howTo1": "Suumi näpuliigutuse või kerimisega, liiguta kaarti lohistades.",

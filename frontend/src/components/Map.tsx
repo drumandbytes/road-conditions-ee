@@ -23,8 +23,13 @@ const CLUSTER_LAYER_PAINT = {
 export type LayerId = keyof typeof CLUSTER_LAYER_PAINT;
 export const LAYER_IDS = Object.keys(CLUSTER_LAYER_PAINT) as LayerId[];
 
-// VMS sign marker styling — three cases, confirmed against production data (150 signs: 122
+// VMS sign marker styling — four cases, confirmed against production data (150 signs: 122
 // have a speed_limit, of which 12 also have a warning; the other 28 have neither):
+// - free/unauthenticated (properties.paid === false): location known, live content isn't —
+//   rendered "locked" (its own muted color + a padlock glyph) rather than either the full
+//   styling below or simply omitting the layer, so a free visitor can see live signs exist
+//   and roughly where, without the live content itself. Mirrors cameras' free-tier "location
+//   visible, image gated" split.
 // - has a speed_limit: rendered as an actual speed-limit-sign face (white circle, red ring,
 //   the real number as text) instead of the generic icon+flat-color treatment every other
 //   layer uses — the number itself is the useful information, worth showing without a tap.
@@ -33,6 +38,7 @@ export const LAYER_IDS = Object.keys(CLUSTER_LAYER_PAINT) as LayerId[];
 // - neither: muted grey — nothing to show, still visible (so the marker count on the map
 //   matches reality) but visually deprioritized.
 const VMS_MUTED_COLOR = "#8a8f94";
+const VMS_LOCKED_COLOR = "#6b7280";
 const VMS_SIGN_FACE_COLOR = "#ffffff";
 const VMS_SIGN_RING_COLOR = "#d32f2f";
 
@@ -41,7 +47,9 @@ const VMS_SIGN_RING_COLOR = "#d32f2f";
 // hasn't memorized the legend. Camera and hazard icons cut their inner detail (lens, "!")
 // out via fill-rule="evenodd" rather than drawing it in a second color, so it shows the
 // colored circle through the hole instead of needing a second icon image per theme.
-const ICON_SVG: Record<keyof typeof CLUSTER_LAYER_PAINT, string> = {
+// vmsLocked is an extra icon beyond one-per-layer (free-tier VMS markers use it instead of
+// the plain "vms" glyph), hence the intersection type rather than Record<LayerId, string>.
+const ICON_SVG: Record<keyof typeof CLUSTER_LAYER_PAINT, string> & { vmsLocked: string } = {
   weatherStations:
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">' +
     '<path fill="#fff" d="M7 17a4.5 4.5 0 0 1-.4-8.98 5.5 5.5 0 0 1 10.6.98A3.5 3.5 0 0 1 17 17H7Z"/></svg>',
@@ -61,6 +69,11 @@ const ICON_SVG: Record<keyof typeof CLUSTER_LAYER_PAINT, string> = {
   vms:
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">' +
     '<path fill="#fff" fill-rule="evenodd" clip-rule="evenodd" d="M4 5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-5.1l-1.4 3-1.4-3H6a2 2 0 0 1-2-2V5Zm3.2 4.5a1 1 0 1 0 0 2 1 1 0 0 0 0-2Zm3.8 0a1 1 0 1 0 0 2 1 1 0 0 0 0-2Zm3.8 0a1 1 0 1 0 0 2 1 1 0 0 0 0-2Z"/></svg>',
+  // A padlock — communicates "there's something here, subscribe to see it" at a glance,
+  // distinct from the plain signboard glyph used once a viewer can actually see sign content.
+  vmsLocked:
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">' +
+    '<path fill="#fff" fill-rule="evenodd" clip-rule="evenodd" d="M12 3a4 4 0 0 0-4 4v2H7a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-9a1 1 0 0 0-1-1h-1V7a4 4 0 0 0-4-4Zm-2 6V7a2 2 0 1 1 4 0v2Zm1 5a1 1 0 1 1 2 0v2a1 1 0 1 1-2 0Z"/></svg>',
 };
 
 // MapLibre's addImage() needs an actual decoded image, not raw SVG markup — load each icon
@@ -135,6 +148,7 @@ interface PopupsT {
   vmsSpeedLimit: string;
   vmsWarning: string;
   vmsNoActive: string;
+  vmsPaywalled: string;
 }
 
 // Escapes text pulled from Tark Tee's data (station names, hazard descriptions) before it
@@ -338,6 +352,13 @@ function buildRestrictionPopupHtml(properties: Record<string, unknown>, locale: 
 function buildVmsPopupHtml(properties: Record<string, unknown>, locale: Locale, t: PopupsT): string {
   const roadName = properties.roadName ? escapeHtml(String(properties.roadName)) : escapeHtml(t.vmsRoad);
   const roadKm = typeof properties.roadKm === "number" ? ` (km ${properties.roadKm})` : "";
+
+  if (properties.paid === false) {
+    return `
+      <div class="map-popup-title">${roadName}${roadKm}</div>
+      <div class="map-popup-desc">${escapeHtml(t.vmsPaywalled)}</div>
+    `;
+  }
 
   const rows: string[] = [];
   if (typeof properties.speedLimit === "number") {
@@ -763,11 +784,12 @@ export function Map({
             addClusteredSource(map!, "restrictions", restrictions, {
               visible: visibleLayersRef.current.restrictions,
             });
-            // Fetched separately from the four free layers above so its own failure — a 402 for
-            // free/unauthenticated users (resolved to null, not thrown, by getVmsSigns), or any
-            // other network error (caught here too) — never falls into the shared .catch()
+            // Fetched separately from the four free layers above so its own failure (a genuine
+            // network/server error — resolved to null, not thrown, by getVmsSigns; a
+            // free/unauthenticated caller still gets a real 200 now, just with reduced
+            // properties, see api-worker's handleVms) never falls into the shared .catch()
             // below, which would otherwise drop click handling for every other layer just
-            // because this one paid layer isn't available.
+            // because this one failed.
             return getVmsSigns()
               .catch((err) => {
                 console.error("Failed to load VMS layer", err);
@@ -775,8 +797,9 @@ export function Map({
               })
               .then((vms) => {
                 if (vms) {
-                  // All signs are shown (not filtered) — see VMS_MUTED_COLOR's comment for the
-                  // three-way styling that distinguishes them instead.
+                  // Four-way styling — see VMS_MUTED_COLOR's comment above for the full
+                  // breakdown (locked/free-tier, has-speed-limit, has-warning-only, empty).
+                  const isLocked: maplibregl.ExpressionSpecification = ["==", ["get", "paid"], false];
                   const hasSpeedLimit: maplibregl.ExpressionSpecification = [
                     "!=",
                     ["get", "speedLimit"],
@@ -784,13 +807,22 @@ export function Map({
                   ];
                   const hasWarning: maplibregl.ExpressionSpecification = ["!=", ["get", "warning"], null];
                   addClusteredSource(map!, "vms", vms, {
-                    fillColor: ["case", hasSpeedLimit, VMS_SIGN_FACE_COLOR, hasWarning, CLUSTER_LAYER_PAINT.vms, VMS_MUTED_COLOR],
-                    strokeColor: ["case", hasSpeedLimit, VMS_SIGN_RING_COLOR, "#ffffff"],
+                    fillColor: [
+                      "case",
+                      isLocked,
+                      VMS_LOCKED_COLOR,
+                      hasSpeedLimit,
+                      VMS_SIGN_FACE_COLOR,
+                      hasWarning,
+                      CLUSTER_LAYER_PAINT.vms,
+                      VMS_MUTED_COLOR,
+                    ],
+                    strokeColor: ["case", isLocked, "#ffffff", hasSpeedLimit, VMS_SIGN_RING_COLOR, "#ffffff"],
                     strokeWidth: 2,
                     radius: 10,
                     visible: visibleLayersRef.current.vms,
-                    iconImage: ["case", hasSpeedLimit, "", "vms"],
-                    textField: ["case", hasSpeedLimit, ["to-string", ["get", "speedLimit"]], ""],
+                    iconImage: ["case", isLocked, "vmsLocked", hasSpeedLimit, "", "vms"],
+                    textField: ["case", isLocked, "", hasSpeedLimit, ["to-string", ["get", "speedLimit"]], ""],
                   });
                   addedLayerIds.push("vms");
                 }

@@ -42,9 +42,10 @@ export async function getRestrictions(): Promise<GeoJSON.FeatureCollection> {
   return (await apiFetch("/api/restrictions")).json();
 }
 
-// Unlike the four free layers above, this 402s for free/unauthenticated users (no
-// location-only tier makes sense for live sign content) — returns null rather than throwing,
-// so the map can simply omit the layer instead of treating it as a load failure.
+// Free/unauthenticated callers still get 200s here — see api-worker's handleVms — just with
+// each feature's properties reduced to location + road context (`paid: false`, no
+// speedLimit/warning). Still returns null on a genuine failure (network error, 5xx) so the
+// map can omit the layer rather than treating it as a hard error.
 export async function getVmsSigns(): Promise<GeoJSON.FeatureCollection | null> {
   const res = await apiFetch("/api/vms");
   if (!res.ok) return null;
