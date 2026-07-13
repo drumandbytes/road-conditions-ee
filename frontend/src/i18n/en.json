@@ -125,7 +125,19 @@
     "activeBody": "Live camera images and electronic road signs are unlocked.",
     "lifetimeBody": "Live camera images and electronic road signs are unlocked, for good.",
     "manageButton": "Manage subscription",
-    "error": "Something went wrong. Try again in a moment."
+    "error": "Something went wrong. Try again in a moment.",
+    "signedInAs": "Signed in as",
+    "comparisonToggle": "Compare free vs. paid",
+    "comparisonFreeHeader": "Free",
+    "comparisonPaidHeader": "Paid",
+    "comparisonWeatherReadings": "Live weather station readings",
+    "comparisonHazards": "Hazard & road condition alerts",
+    "comparisonRestrictions": "Roadworks & speed restrictions",
+    "comparisonLocations": "Camera & road sign locations",
+    "comparisonCameraImages": "Live camera images",
+    "comparisonVmsLive": "Live sign speed limits & warnings",
+    "comparisonHistory": "Weather station history & graphs",
+    "comparisonAlerts": "Saved locations & push alerts"
   },
   "savedPoints": {
     "title": "Saved locations",

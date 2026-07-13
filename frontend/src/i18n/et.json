@@ -125,7 +125,19 @@
     "activeBody": "Otsepildid kaameratest ja muutuv-teabega liiklusmärgid on avatud.",
     "lifetimeBody": "Otsepildid kaameratest ja muutuv-teabega liiklusmärgid on jäädavalt avatud.",
     "manageButton": "Halda tellimust",
-    "error": "Midagi läks valesti. Proovi hetke pärast uuesti."
+    "error": "Midagi läks valesti. Proovi hetke pärast uuesti.",
+    "signedInAs": "Sisse logitud kui",
+    "comparisonToggle": "Võrdle tasuta ja tasulist",
+    "comparisonFreeHeader": "Tasuta",
+    "comparisonPaidHeader": "Tasuline",
+    "comparisonWeatherReadings": "Ilmajaamade reaalajas näidud",
+    "comparisonHazards": "Ohuteated ja teeolu hoiatused",
+    "comparisonRestrictions": "Teetööd ja kiiruspiirangud",
+    "comparisonLocations": "Kaamerate ja liiklusmärkide asukohad",
+    "comparisonCameraImages": "Otsepilt kaameratest",
+    "comparisonVmsLive": "Liiklusmärkide reaalajas kiiruspiirangud ja hoiatused",
+    "comparisonHistory": "Ilmajaamade ajalugu ja graafikud",
+    "comparisonAlerts": "Salvestatud asukohad ja push-teavitused"
   },
   "savedPoints": {
     "title": "Salvestatud asukohad",

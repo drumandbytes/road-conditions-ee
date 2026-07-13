@@ -1,6 +1,8 @@
 import { useEffect, useState } from "preact/hooks";
 import { BEARER_TOKEN_CHANGED_EVENT, getAccountStatus, startCheckout, startPortalSession } from "../lib/api";
 import type { AccountStatus, Plan } from "../lib/api";
+import { FeatureComparisonTable } from "./FeatureComparisonTable";
+import type { FeatureComparisonT } from "./FeatureComparisonTable";
 import { SavedPointsSection } from "./SavedPointsSection";
 import type { SavedPointsSectionT } from "./SavedPointsSection";
 import { SignInForm } from "./SignInForm";
@@ -30,7 +32,8 @@ interface AccountPanelProps {
       lifetimeBody: string;
       manageButton: string;
       error: string;
-    };
+      signedInAs: string;
+    } & FeatureComparisonT;
     savedPoints: SavedPointsSectionT;
     signIn: SignInFormT;
   };
@@ -110,6 +113,12 @@ export function AccountPanel({ t, savedPointsRefreshKey, onAddSavedPoint }: Acco
         {state.status === "lifetime" && <span class="status-badge status-badge-lifetime">{t.account.statusLifetime}</span>}
       </div>
 
+      {(state.status === "active" || state.status === "lifetime") && state.account.email && (
+        <p class="account-email">
+          {t.account.signedInAs} <strong>{state.account.email}</strong>
+        </p>
+      )}
+
       {state.status === "loading" && <div class="account-skeleton" aria-hidden="true" />}
 
       {state.status === "error" && <p class="account-alert account-alert-error">{t.account.error}</p>}
@@ -129,6 +138,7 @@ export function AccountPanel({ t, savedPointsRefreshKey, onAddSavedPoint }: Acco
             ))}
           </div>
           <p class="account-trial-note">{t.account.trialNote}</p>
+          <FeatureComparisonTable t={t.account} />
           <SignInForm t={t.signIn} />
         </>
       )}

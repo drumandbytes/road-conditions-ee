@@ -1,5 +1,6 @@
 import { useState } from "preact/hooks";
 import { AccountPanel } from "./AccountPanel";
+import type { FeatureComparisonT } from "./FeatureComparisonTable";
 import type { LayerId } from "./Map";
 import type { SavedPointsSectionT } from "./SavedPointsSection";
 import type { SignInFormT } from "./SignInForm";
@@ -70,7 +71,8 @@ interface InfoPanelProps {
       lifetimeBody: string;
       manageButton: string;
       error: string;
-    };
+      signedInAs: string;
+    } & FeatureComparisonT;
     savedPoints: SavedPointsSectionT;
     signIn: SignInFormT;
   };

@@ -770,6 +770,12 @@ body,
   color: var(--color-gold);
 }
 
+.account-email {
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+  margin: -0.25rem 0 0.75rem 0;
+}
+
 .account-alert {
   font-size: 0.85rem;
   padding: 0.65rem 0.85rem;
@@ -876,6 +882,60 @@ body,
 .account-trial-note {
   font-size: 0.8rem;
   color: var(--color-text-secondary);
+}
+
+.feature-comparison {
+  margin: 1rem 0;
+}
+
+.feature-comparison-toggle {
+  color: var(--color-text-secondary);
+  font-size: 0.85rem;
+  text-decoration: underline;
+  cursor: pointer;
+  list-style: none;
+}
+
+.feature-comparison-toggle::-webkit-details-marker {
+  display: none;
+}
+
+.feature-comparison-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 0.75rem;
+  font-size: 0.8rem;
+}
+
+.feature-comparison-table th,
+.feature-comparison-table td {
+  padding: 0.45rem 0.4rem;
+  border-bottom: 1px solid var(--color-bg-subtle);
+  text-align: left;
+}
+
+.feature-comparison-table thead th {
+  color: var(--color-text-secondary);
+  font-weight: 600;
+}
+
+.feature-comparison-table td {
+  text-align: center;
+  font-weight: 700;
+}
+
+.feature-comparison-yes {
+  color: var(--color-success);
+}
+
+.feature-comparison-no {
+  color: var(--color-text-secondary);
+  font-weight: 400;
+}
+
+.feature-comparison-table tbody th {
+  font-weight: 400;
+  color: var(--color-text);
 }
 
 .account-button-secondary {
