@@ -4,6 +4,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import { Protocol } from "pmtiles";
 import { layers, namedFlavor } from "@protomaps/basemaps";
 import { ESTONIA_BOUNDS, MAX_PAN_BOUNDS, ESTONIA_TILES_URL } from "../lib/config";
+import { circlePolygon } from "../lib/geo";
 import { getCameras, getHazards, getRestrictions, getVmsSigns, getWeatherStations } from "../lib/api";
 import type { Locale } from "./InfoPanel";
 
@@ -651,6 +652,10 @@ interface MapProps {
   // not in that flow.
   pinDraft: { lat: number; lng: number } | null;
   onPinDragEnd: (lat: number, lng: number) => void;
+  // Draws a geodesic circle (not a naive pixel radius, which would be visually wrong at
+  // Estonia's latitudes) around pinDraft showing the alert radius being configured — see
+  // SavedPointEditor's radius slider. null while that slider isn't visible.
+  radiusPreviewKm: number | null;
   visibleLayers: Record<LayerId, boolean>;
 }
 
@@ -663,6 +668,7 @@ export function Map({
   onViewHistory,
   pinDraft,
   onPinDragEnd,
+  radiusPreviewKm,
   visibleLayers,
 }: MapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -763,6 +769,24 @@ export function Map({
       map.addControl(new maplibregl.GeolocateControl({ positionOptions: { enableHighAccuracy: true } }), "top-right");
 
       map.on("load", () => {
+        // Empty until the radius-preview effect below fills it in — added here (not lazily)
+        // so that effect can just call setData on a source guaranteed to already exist.
+        // Added before the data-layer sources so its fill/outline render underneath every
+        // marker layer, not over them.
+        map!.addSource("radius-preview", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+        map!.addLayer({
+          id: "radius-preview-fill",
+          type: "fill",
+          source: "radius-preview",
+          paint: { "fill-color": "#16a085", "fill-opacity": 0.15 },
+        });
+        map!.addLayer({
+          id: "radius-preview-outline",
+          type: "line",
+          source: "radius-preview",
+          paint: { "line-color": "#16a085", "line-width": 2 },
+        });
+
         // Icons must be registered before any symbol layer references them — MapLibre throws
         // if icon-image points at an unknown id, so this has to resolve before addClusteredSource.
         Promise.all(
@@ -898,6 +922,28 @@ export function Map({
       map.easeTo({ center: [pinDraft.lng, pinDraft.lat], zoom: Math.max(map.getZoom(), 14) });
     }
   }, [pinDraft]);
+
+  // Keeps the radius-preview polygon in sync with the pin position and the slider in
+  // SavedPointEditor. The source is guaranteed to exist once the map has loaded (added
+  // unconditionally in the init effect's "load" handler above) — the getSource check here is
+  // only for the brief window before that's happened.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const source = map.getSource("radius-preview") as maplibregl.GeoJSONSource | undefined;
+    if (!source) return;
+
+    if (!pinDraft || radiusPreviewKm === null) {
+      source.setData({ type: "FeatureCollection", features: [] });
+      return;
+    }
+    source.setData({
+      type: "FeatureCollection",
+      features: [
+        { type: "Feature", properties: {}, geometry: circlePolygon(pinDraft.lat, pinDraft.lng, radiusPreviewKm) },
+      ],
+    });
+  }, [pinDraft, radiusPreviewKm]);
 
   // A toggle from the legend applies live to whichever layers already exist — via
   // setLayoutProperty, not by recreating them — so switching a layer off and back on doesn't

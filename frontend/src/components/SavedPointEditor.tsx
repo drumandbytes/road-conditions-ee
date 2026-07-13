@@ -78,13 +78,24 @@ interface SavedPointEditorProps {
   onPinMove: (lat: number, lng: number) => void;
   onClose: () => void;
   onSaved: () => void;
+  // Lets Map.tsx draw a live radius-coverage circle around the pin while the slider below is
+  // visible — null hides it (not shown during the "placing" step, since the radius hasn't
+  // been chosen yet at that point).
+  onRadiusPreviewChange: (radiusKm: number | null) => void;
 }
 
 // Debounced so every keystroke doesn't fire a request — Nominatim's usage policy caps at
 // roughly 1 request/second for this whole app, not just one user's typing.
 const SEARCH_DEBOUNCE_MS = 400;
 
-export function SavedPointEditor({ t, pin, onPinMove, onClose, onSaved }: SavedPointEditorProps) {
+export function SavedPointEditor({
+  t,
+  pin,
+  onPinMove,
+  onClose,
+  onSaved,
+  onRadiusPreviewChange,
+}: SavedPointEditorProps) {
   const [step, setStep] = useState<"placing" | "details">("placing");
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<GeocodeCandidate[]>([]);
@@ -188,7 +199,14 @@ export function SavedPointEditor({ t, pin, onPinMove, onClose, onSaved }: SavedP
               <button type="button" class="account-button account-button-secondary" onClick={onClose}>
                 {t.cancelButton}
               </button>
-              <button type="button" class="account-button" onClick={() => setStep("details")}>
+              <button
+                type="button"
+                class="account-button"
+                onClick={() => {
+                  setStep("details");
+                  onRadiusPreviewChange(radiusKm);
+                }}
+              >
                 {t.confirmLocationButton}
               </button>
             </div>
@@ -224,7 +242,11 @@ export function SavedPointEditor({ t, pin, onPinMove, onClose, onSaved }: SavedP
               max={MAX_RADIUS_KM}
               step={1}
               value={radiusKm}
-              onInput={(e) => setRadiusKm(Number((e.target as HTMLInputElement).value))}
+              onInput={(e) => {
+                const value = Number((e.target as HTMLInputElement).value);
+                setRadiusKm(value);
+                onRadiusPreviewChange(value);
+              }}
             />
           </label>
 
@@ -246,7 +268,14 @@ export function SavedPointEditor({ t, pin, onPinMove, onClose, onSaved }: SavedP
           </div>
 
           <div class="pin-editor-actions">
-            <button type="button" class="account-button account-button-secondary" onClick={() => setStep("placing")}>
+            <button
+              type="button"
+              class="account-button account-button-secondary"
+              onClick={() => {
+                setStep("placing");
+                onRadiusPreviewChange(null);
+              }}
+            >
               {t.backButton}
             </button>
             <button type="submit" class="account-button" disabled={saving || !label.trim()}>

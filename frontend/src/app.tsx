@@ -57,6 +57,7 @@ export function App() {
   const [theme, setTheme] = useState<Theme>(getInitialTheme);
   const [infoOpen, setInfoOpen] = useState(false);
   const [pinDraft, setPinDraft] = useState<{ lat: number; lng: number } | null>(null);
+  const [radiusPreviewKm, setRadiusPreviewKm] = useState<number | null>(null);
   const [visibleLayers, setVisibleLayers] = useState<Record<LayerId, boolean>>(getInitialVisibleLayers);
   // Bumped after a saved point is created — AccountPanel's saved-points list re-fetches
   // whenever this changes (see SavedPointsSection's effect deps), simpler than threading the
@@ -172,6 +173,7 @@ export function App() {
         onViewHistory={(stationName) => setSelectedWeatherHistoryStation(stationName)}
         pinDraft={pinDraft}
         onPinDragEnd={(lat, lng) => setPinDraft({ lat, lng })}
+        radiusPreviewKm={radiusPreviewKm}
         visibleLayers={visibleLayers}
       />
       <InfoPanel
@@ -184,6 +186,7 @@ export function App() {
         onAddSavedPoint={() => {
           setInfoOpen(false);
           setPinDraft(DEFAULT_PIN);
+          setRadiusPreviewKm(null);
         }}
       />
       <LayerMenu
@@ -197,12 +200,17 @@ export function App() {
           t={t.savedPoints}
           pin={pinDraft}
           onPinMove={(lat, lng) => setPinDraft({ lat, lng })}
-          onClose={() => setPinDraft(null)}
+          onClose={() => {
+            setPinDraft(null);
+            setRadiusPreviewKm(null);
+          }}
           onSaved={() => {
             setPinDraft(null);
+            setRadiusPreviewKm(null);
             setSavedPointsRefreshKey((k) => k + 1);
             setInfoOpen(true);
           }}
+          onRadiusPreviewChange={setRadiusPreviewKm}
         />
       )}
       {selectedCamera && (
