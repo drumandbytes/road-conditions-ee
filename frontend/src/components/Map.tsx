@@ -20,13 +20,18 @@ const CLUSTER_LAYER_PAINT = {
   vms: "#16a085",
 } as const;
 
-// Most VMS signs display a routine, unchanging speed limit (110/120/90 km/h — the normal
-// posted limit for that stretch, not a restriction) rather than an active warning — confirmed
-// directly against production data (122 of 150 signs have a speed_limit set, but only 12 have
-// an actual warning). Full teal would make the layer read as "122 things worth your attention"
-// when almost none of them are. Signs with no warning get this muted grey instead; only a real
-// warning gets the normal teal — see addClusteredSource's pointColor param.
+// VMS sign marker styling — three cases, confirmed against production data (150 signs: 122
+// have a speed_limit, of which 12 also have a warning; the other 28 have neither):
+// - has a speed_limit: rendered as an actual speed-limit-sign face (white circle, red ring,
+//   the real number as text) instead of the generic icon+flat-color treatment every other
+//   layer uses — the number itself is the useful information, worth showing without a tap.
+// - no speed_limit but has a warning (none currently, but the schema allows it): the normal
+//   teal + generic signboard glyph, same treatment as any other "something to say" marker.
+// - neither: muted grey — nothing to show, still visible (so the marker count on the map
+//   matches reality) but visually deprioritized.
 const VMS_MUTED_COLOR = "#8a8f94";
+const VMS_SIGN_FACE_COLOR = "#ffffff";
+const VMS_SIGN_RING_COLOR = "#d32f2f";
 
 // One small white glyph per marker type, layered on top of its colored circle — plain
 // same-size dots in three colors read as arbitrary at a glance, especially for anyone who
@@ -349,13 +354,6 @@ function buildVmsPopupHtml(properties: Record<string, unknown>, locale: Locale, 
   `;
 }
 
-// Most VMS signs are blank at any given moment — same "has anything to show" check as
-// buildVmsPopupHtml's rows above, applied before a sign is even added to the map (see the
-// VMS fetch in the load handler below), not just at popup-render time.
-function hasActiveVmsContent(feature: GeoJSON.Feature): boolean {
-  const properties = feature.properties ?? {};
-  return typeof properties.speedLimit === "number" || Boolean(properties.warning);
-}
 
 interface MarkerLabelsT {
   weatherStations: string;
@@ -365,16 +363,38 @@ interface MarkerLabelsT {
   vms: string;
 }
 
+type ColorExpr = string | maplibregl.ExpressionSpecification;
+
+interface PointStyleOverrides {
+  fillColor?: ColorExpr;
+  strokeColor?: ColorExpr;
+  strokeWidth?: number;
+  radius?: number;
+  // icon-image and text-field can both be set per point (data-driven) so a single layer can
+  // show *either* an icon *or* text per feature — currently only vms does this, to show the
+  // sign's actual speed-limit number instead of a generic glyph when it has one. "" (empty
+  // string) for either means "nothing" for that feature, same semantics as MapLibre's own.
+  iconImage?: ColorExpr;
+  textField?: maplibregl.ExpressionSpecification;
+  textColor?: string;
+}
+
 function addClusteredSource(
   map: maplibregl.Map,
   id: keyof typeof CLUSTER_LAYER_PAINT,
   data: GeoJSON.FeatureCollection,
-  // Individual points can override the flat per-layer color with a data-driven expression
-  // (currently only vms does, to grey out routine-limit-only signs) — clusters always stay
-  // the flat color regardless, since a cluster mixes points and can't meaningfully represent
-  // "some of these are muted."
-  pointColor: string | maplibregl.ExpressionSpecification = CLUSTER_LAYER_PAINT[id],
+  overrides: PointStyleOverrides = {},
 ) {
+  const {
+    fillColor = CLUSTER_LAYER_PAINT[id],
+    strokeColor = "#ffffff",
+    strokeWidth = 1.5,
+    radius = 9,
+    iconImage = id,
+    textField,
+    textColor = "#111111",
+  } = overrides;
+
   map.addSource(id, { type: "geojson", data, cluster: true, clusterMaxZoom: 14, clusterRadius: 50 });
 
   map.addLayer({
@@ -412,12 +432,12 @@ function addClusteredSource(
     source: id,
     filter: ["!", ["has", "point_count"]],
     paint: {
-      "circle-color": pointColor,
+      "circle-color": fillColor,
       // Bumped from the original 6px — a legible icon on top needs a bit more room than a
       // plain color dot did.
-      "circle-radius": 9,
-      "circle-stroke-width": 1.5,
-      "circle-stroke-color": "#ffffff",
+      "circle-radius": radius,
+      "circle-stroke-width": strokeWidth,
+      "circle-stroke-color": strokeColor,
     },
   });
 
@@ -426,7 +446,25 @@ function addClusteredSource(
     type: "symbol",
     source: id,
     filter: ["!", ["has", "point_count"]],
-    layout: { "icon-image": id, "icon-size": 0.58, "icon-allow-overlap": true, "icon-ignore-placement": true },
+    layout: {
+      "icon-image": iconImage,
+      "icon-size": 0.58,
+      "icon-allow-overlap": true,
+      "icon-ignore-placement": true,
+      // Only set when a layer actually uses text (currently just vms's speed-limit number) —
+      // omitted entirely for everything else, matching the pre-existing generated layer spec
+      // byte-for-byte rather than adding an always-empty text-field to every layer.
+      ...(textField !== undefined
+        ? ({
+            "text-field": textField,
+            "text-size": 9,
+            "text-font": ["Noto Sans Regular"],
+            "text-allow-overlap": true,
+            "text-ignore-placement": true,
+          } as const)
+        : {}),
+    },
+    ...(textField !== undefined ? { paint: { "text-color": textColor } } : {}),
   });
 
   // Individual-point clicks are handled by one consolidated listener registered after all
@@ -706,21 +744,23 @@ export function Map({
               })
               .then((vms) => {
                 if (vms) {
-                  // Fully blank signs (no speed limit, no warning — confirmed ~28 of 150 in
-                  // production) are dropped entirely; nothing to show. The remaining signs
-                  // mostly display a routine, unchanging speed limit rather than an actual
-                  // warning (confirmed: 122 have a speed_limit set, but only 12 have a
-                  // warning) — those get VMS_MUTED_COLOR via pointColor below rather than
-                  // full teal, so a real warning still stands out. Deliberately not a
-                  // user-facing layer toggle (more UI surface for a problem this solves more
-                  // simply) — see VMS_MUTED_COLOR's comment.
-                  const activeVms = { ...vms, features: vms.features.filter(hasActiveVmsContent) };
-                  addClusteredSource(map!, "vms", activeVms, [
-                    "case",
-                    ["==", ["get", "warning"], null],
-                    VMS_MUTED_COLOR,
-                    CLUSTER_LAYER_PAINT.vms,
-                  ]);
+                  // All signs are shown (not filtered) — see VMS_MUTED_COLOR's comment for the
+                  // three-way styling that distinguishes them instead. Deliberately not a
+                  // user-facing layer toggle (more UI surface than this actually needs).
+                  const hasSpeedLimit: maplibregl.ExpressionSpecification = [
+                    "!=",
+                    ["get", "speedLimit"],
+                    null,
+                  ];
+                  const hasWarning: maplibregl.ExpressionSpecification = ["!=", ["get", "warning"], null];
+                  addClusteredSource(map!, "vms", vms, {
+                    fillColor: ["case", hasSpeedLimit, VMS_SIGN_FACE_COLOR, hasWarning, CLUSTER_LAYER_PAINT.vms, VMS_MUTED_COLOR],
+                    strokeColor: ["case", hasSpeedLimit, VMS_SIGN_RING_COLOR, "#ffffff"],
+                    strokeWidth: 2,
+                    radius: 10,
+                    iconImage: ["case", hasSpeedLimit, "", "vms"],
+                    textField: ["case", hasSpeedLimit, ["to-string", ["get", "speedLimit"]], ""],
+                  });
                   addedLayerIds.push("vms");
                 }
                 setupPointClickHandling(
