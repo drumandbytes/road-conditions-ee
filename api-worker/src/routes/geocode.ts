@@ -29,13 +29,22 @@ export interface GeocodeCandidate {
   lng: number;
 }
 
-export async function handleGeocode(request: Request): Promise<Response> {
-  const url = new URL(request.url);
-  const q = url.searchParams.get("q")?.trim() ?? "";
-  if (q.length < MIN_QUERY_LENGTH || q.length > MAX_QUERY_LENGTH) {
-    return Response.json({ error: "Query must be between 3 and 120 characters" }, { status: 400 });
-  }
+// Estonian street names are very often spoken/written with the honoree's first name(s)
+// abbreviated to initials ("J. Vilmsi", "A. H. Tammsaare tee"), but OSM/Nominatim usually
+// indexes the street under its full name ("Jüri Vilmsi") — its tokenizer doesn't expand
+// initials, so a query with them attached returns zero results even though the street exists.
+// Stripping single-letter-plus-period tokens and retrying once recovers these (verified against
+// several real Tallinn streets: "A. Lauteri" / "F. R. Faehlmanni" both fail, "Lauteri" /
+// "Faehlmanni" both succeed).
+function stripInitials(q: string): string {
+  return q
+    .split(/\s+/)
+    .filter((token) => !/^\p{L}\.$/u.test(token))
+    .join(" ")
+    .trim();
+}
 
+async function queryNominatim(q: string): Promise<NominatimResult[] | null> {
   const nominatimUrl = new URL(NOMINATIM_URL);
   nominatimUrl.searchParams.set("q", q);
   nominatimUrl.searchParams.set("format", "jsonv2");
@@ -47,13 +56,31 @@ export async function handleGeocode(request: Request): Promise<Response> {
     res = await fetch(nominatimUrl, { headers: { "User-Agent": USER_AGENT } });
   } catch (err) {
     console.error("[api-worker] geocode fetch failed:", err instanceof Error ? err.message : err);
-    return Response.json({ error: "Geocoding service unavailable" }, { status: 502 });
+    return null;
   }
-  if (!res.ok) {
+  if (!res.ok) return null;
+  return res.json();
+}
+
+export async function handleGeocode(request: Request): Promise<Response> {
+  const url = new URL(request.url);
+  const q = url.searchParams.get("q")?.trim() ?? "";
+  if (q.length < MIN_QUERY_LENGTH || q.length > MAX_QUERY_LENGTH) {
+    return Response.json({ error: "Query must be between 3 and 120 characters" }, { status: 400 });
+  }
+
+  let results = await queryNominatim(q);
+  if (results === null) {
     return Response.json({ error: "Geocoding service unavailable" }, { status: 502 });
   }
 
-  const results = (await res.json()) as NominatimResult[];
+  if (results.length === 0) {
+    const stripped = stripInitials(q);
+    if (stripped.length >= MIN_QUERY_LENGTH && stripped !== q) {
+      results = (await queryNominatim(stripped)) ?? results;
+    }
+  }
+
   const candidates: GeocodeCandidate[] = results.map((r) => ({
     label: r.display_name,
     lat: Number(r.lat),

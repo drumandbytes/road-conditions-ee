@@ -547,6 +547,39 @@ describe("handleGeocode", () => {
     const res = await handleGeocode(new Request("https://example.com/api/geocode?q=Narva+mnt"));
     expect(res.status).toBe(502);
   });
+
+  it("retries with initials stripped when the first search finds nothing", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify([]), { status: 200 }))
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify([{ display_name: "45a, Jüri Vilmsi, Tallinn, Eesti", lat: "59.44", lon: "24.77" }]),
+          { status: 200 },
+        ),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await handleGeocode(new Request("https://example.com/api/geocode?q=J.+Vilmsi+45a"));
+    const body = await res.json();
+
+    expect(body).toEqual([{ label: "45a, Jüri Vilmsi, Tallinn, Eesti", lat: 59.44, lng: 24.77 }]);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(String(fetchMock.mock.calls[0][0])).toContain("q=J.+Vilmsi+45a");
+    expect(String(fetchMock.mock.calls[1][0])).toContain("q=Vilmsi+45a");
+  });
+
+  it("does not retry when the first search already found results", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify([{ display_name: "Narva mnt 5, Tallinn, Eesti", lat: "59.4", lon: "24.7" }]), {
+        status: 200,
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await handleGeocode(new Request("https://example.com/api/geocode?q=Narva+mnt+5"));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
 });
 
 const PAID_USER: UserRow = {
