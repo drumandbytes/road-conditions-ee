@@ -2,6 +2,10 @@ name = "road-conditions-api-worker"
 main = "index.ts"
 compatibility_date = "2026-01-01"
 
+# Kept enabled alongside the custom domain below — costs nothing to leave on and gives us a
+# fallback host if the custom domain's cert/DNS ever has issues.
+workers_dev = true
+
 [observability]
 enabled = true
 head_sampling_rate = 1
@@ -17,5 +21,6 @@ database_id = "b4a456a7-c3f3-4a1e-95e5-4a8b7af4deb1"
 [[send_email]]
 name = "EMAIL"
 
-# TODO Phase 5: add [[routes]] once the frontend/API domain split is decided
-# (see "Domain" open question in the plan). Deploys to *.workers.dev until then.
+[[routes]]
+pattern = "api.drumandbytes.ee"
+custom_domain = true
