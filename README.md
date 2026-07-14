@@ -59,3 +59,9 @@ Root-level scripts: `npm run lint` (all TS across the repo), `npm run deploy:all
 
 Data: Transpordiamet (Tark Tee), per their [terms of use](https://tarktee.ee/#/et/terms).
 Map: © OpenStreetMap contributors, via Protomaps.
+
+## License
+
+Source-available, all rights reserved — see [LICENSE](LICENSE). Bug reports and feature
+requests are welcome via Issues; see [CONTRIBUTING.md](CONTRIBUTING.md). Found a security
+issue? See [SECURITY.md](SECURITY.md) instead of filing a public issue.
