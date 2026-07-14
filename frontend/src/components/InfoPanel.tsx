@@ -157,132 +157,134 @@ export function InfoPanel({
               </button>
             </div>
 
-            {subview === "about" && (
-              <>
-                <button type="button" class="back-link" onClick={() => setSubview("none")}>
-                  ← {t.info.backButton}
-                </button>
+            <div class="info-panel-body">
+              {subview === "about" && (
+                <>
+                  <button type="button" class="back-link" onClick={() => setSubview("none")}>
+                    ← {t.info.backButton}
+                  </button>
 
-                <h2>{t.info.aboutTitle}</h2>
-                <p>{t.info.aboutBody}</p>
-                <p>{t.info.aboutBodyExtra}</p>
+                  <h2>{t.info.aboutTitle}</h2>
+                  <p>{t.info.aboutBody}</p>
+                  <p>{t.info.aboutBodyExtra}</p>
 
-                <h2>{t.info.supportTitle}</h2>
-                <p>{t.info.supportBody}</p>
-                <a href={COFFEE_LINK} target="_blank" rel="noopener noreferrer">
-                  <img
-                    class="support-button"
-                    src="https://cdn.buymeacoffee.com/buttons/v2/default-blue.png"
-                    alt={t.info.supportLink}
-                  />
-                </a>
-
-                <h2>{t.info.issueTitle}</h2>
-                <p>
-                  {t.info.issueBody}{" "}
-                  <a href={ISSUE_LINK} target="_blank" rel="noopener noreferrer">
-                    {t.info.issueLink}
+                  <h2>{t.info.supportTitle}</h2>
+                  <p>{t.info.supportBody}</p>
+                  <a href={COFFEE_LINK} target="_blank" rel="noopener noreferrer">
+                    <img
+                      class="support-button"
+                      src="https://cdn.buymeacoffee.com/buttons/v2/default-blue.png"
+                      alt={t.info.supportLink}
+                    />
                   </a>
-                </p>
-              </>
-            )}
 
-            {subview === "guide" && (
-              <>
-                <button type="button" class="back-link" onClick={() => setSubview("none")}>
-                  ← {t.info.backButton}
-                </button>
+                  <h2>{t.info.issueTitle}</h2>
+                  <p>
+                    {t.info.issueBody}{" "}
+                    <a href={ISSUE_LINK} target="_blank" rel="noopener noreferrer">
+                      {t.info.issueLink}
+                    </a>
+                  </p>
+                </>
+              )}
 
-                <h2>{t.info.guideUsingMapTitle}</h2>
-                <ol class="steps-list">
-                  <li>{t.info.guideUsingMap1}</li>
-                  <li>{t.info.guideUsingMap2}</li>
-                  <li>{t.info.guideUsingMap3}</li>
-                  <li>{t.info.guideUsingMap4}</li>
-                </ol>
+              {subview === "guide" && (
+                <>
+                  <button type="button" class="back-link" onClick={() => setSubview("none")}>
+                    ← {t.info.backButton}
+                  </button>
 
-                <h2>{t.info.guideAlertsTitle}</h2>
-                <p>{t.info.guideAlertsBody1}</p>
-                <p>{t.info.guideAlertsBody2}</p>
-                <p>{t.info.guideAlertsBody3}</p>
-                <p>{t.info.guideAlertsBody4}</p>
+                  <h2>{t.info.guideUsingMapTitle}</h2>
+                  <ol class="steps-list">
+                    <li>{t.info.guideUsingMap1}</li>
+                    <li>{t.info.guideUsingMap2}</li>
+                    <li>{t.info.guideUsingMap3}</li>
+                    <li>{t.info.guideUsingMap4}</li>
+                  </ol>
 
-                <h2>{t.info.guideFreeVsPaidTitle}</h2>
-                <p>{t.info.guideFreeVsPaidBody}</p>
+                  <h2>{t.info.guideAlertsTitle}</h2>
+                  <p>{t.info.guideAlertsBody1}</p>
+                  <p>{t.info.guideAlertsBody2}</p>
+                  <p>{t.info.guideAlertsBody3}</p>
+                  <p>{t.info.guideAlertsBody4}</p>
 
-                <h2>{t.info.guideAccountTitle}</h2>
-                <p>{t.info.guideAccountBody1}</p>
-                <p>{t.info.guideAccountBody2}</p>
-                <p>{t.info.guideAccountBody3}</p>
-              </>
-            )}
+                  <h2>{t.info.guideFreeVsPaidTitle}</h2>
+                  <p>{t.info.guideFreeVsPaidBody}</p>
 
-            {subview === "none" && (
-              <>
-                <div class="panel-tabs" role="tablist">
-                  {(
-                    [
-                      ["info", t.info.tabInfo],
-                      ["account", t.info.tabAccount],
-                    ] as const
-                  ).map(([key, label]) => (
-                    <button
-                      key={key}
-                      type="button"
-                      role="tab"
-                      aria-selected={tab === key}
-                      class={tab === key ? "panel-tab panel-tab-active" : "panel-tab"}
-                      onClick={() => setTab(key)}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
+                  <h2>{t.info.guideAccountTitle}</h2>
+                  <p>{t.info.guideAccountBody1}</p>
+                  <p>{t.info.guideAccountBody2}</p>
+                  <p>{t.info.guideAccountBody3}</p>
+                </>
+              )}
 
-                {tab === "info" && (
-                  <>
-                    <h2>{t.info.legendTitle}</h2>
-                    <ul class="legend-list">
-                      {LEGEND_ROWS.map((row) => (
-                        <li key={row.id} class="legend-row">
-                          <span class="legend-icon" style={{ background: row.color }} />
-                          <span class="legend-text">
-                            <span class="legend-item-title">{t.info[row.titleKey]}</span>
-                            <span class="legend-desc">{t.info[row.descKey]}</span>
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                    <p class="legend-note">{t.info.legendClusters}</p>
+              {subview === "none" && (
+                <>
+                  <div class="panel-tabs" role="tablist">
+                    {(
+                      [
+                        ["info", t.info.tabInfo],
+                        ["account", t.info.tabAccount],
+                      ] as const
+                    ).map(([key, label]) => (
+                      <button
+                        key={key}
+                        type="button"
+                        role="tab"
+                        aria-selected={tab === key}
+                        class={tab === key ? "panel-tab panel-tab-active" : "panel-tab"}
+                        onClick={() => setTab(key)}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
 
-                    <h2>{t.info.howToTitle}</h2>
-                    <ol class="steps-list">
-                      <li>{t.info.howTo1}</li>
-                      <li>{t.info.howTo2}</li>
-                      <li>{t.info.howTo3}</li>
-                    </ol>
+                  {tab === "info" && (
+                    <>
+                      <h2>{t.info.legendTitle}</h2>
+                      <ul class="legend-list">
+                        {LEGEND_ROWS.map((row) => (
+                          <li key={row.id} class="legend-row">
+                            <span class="legend-icon" style={{ background: row.color }} />
+                            <span class="legend-text">
+                              <span class="legend-item-title">{t.info[row.titleKey]}</span>
+                              <span class="legend-desc">{t.info[row.descKey]}</span>
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                      <p class="legend-note">{t.info.legendClusters}</p>
 
-                    <h2>{t.info.dataTitle}</h2>
-                    <p class="data-attribution">{t.attribution}</p>
-                  </>
-                )}
+                      <h2>{t.info.howToTitle}</h2>
+                      <ol class="steps-list">
+                        <li>{t.info.howTo1}</li>
+                        <li>{t.info.howTo2}</li>
+                        <li>{t.info.howTo3}</li>
+                      </ol>
 
-                {tab === "account" && (
-                  <AccountPanel
-                    t={t}
-                    savedPointsRefreshKey={savedPointsRefreshKey}
-                    onAddSavedPoint={onAddSavedPoint}
-                  />
-                )}
+                      <h2>{t.info.dataTitle}</h2>
+                      <p class="data-attribution">{t.attribution}</p>
+                    </>
+                  )}
 
-                <button type="button" class="about-link" onClick={() => setSubview("guide")}>
-                  {t.info.guideLink}
-                </button>
-                <button type="button" class="about-link" onClick={() => setSubview("about")}>
-                  {t.info.aboutLink}
-                </button>
-              </>
-            )}
+                  {tab === "account" && (
+                    <AccountPanel
+                      t={t}
+                      savedPointsRefreshKey={savedPointsRefreshKey}
+                      onAddSavedPoint={onAddSavedPoint}
+                    />
+                  )}
+
+                  <button type="button" class="about-link" onClick={() => setSubview("guide")}>
+                    {t.info.guideLink}
+                  </button>
+                  <button type="button" class="about-link" onClick={() => setSubview("about")}>
+                    {t.info.aboutLink}
+                  </button>
+                </>
+              )}
+              </div>
           </div>
         </div>
       )}
