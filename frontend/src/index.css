@@ -902,25 +902,31 @@ body,
   margin: 0;
 }
 
+/* display:flex + gap here (not a margin-top on the table below) so the toggle-to-table gap
+   uses the exact same 0.85rem value as .account-signup-extras' own gap, rather than a second,
+   separately-chosen rem value that could drift out of sync with it again. */
 .feature-comparison {
   margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
 }
 
 .feature-comparison-toggle {
-  display: block;
+  align-self: flex-start;
   border: none;
   background: none;
   padding: 0;
   color: var(--color-text-secondary);
   font-size: 0.85rem;
   text-decoration: underline;
+  text-align: left;
   cursor: pointer;
 }
 
 .feature-comparison-table {
   width: 100%;
   border-collapse: collapse;
-  margin-top: 0.75rem;
   font-size: 0.8rem;
 }
 
