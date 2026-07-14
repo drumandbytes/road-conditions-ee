@@ -14,6 +14,20 @@ const CATEGORY_LABELS: Record<Exclude<Category, "all">, string> = {
   billing: "Arved ja tellimuse teated",
 };
 
+// uid/sig only ever reach renderPage after passing HMAC verification, which in practice
+// constrains them to hex/base64url charsets no legitimate value could escape an HTML
+// attribute with — but that's an implicit property of how signing works today, not something
+// this function can see. Escaping explicitly means this stays safe even if that reasoning
+// chain (or the verification code) ever changes, at zero real cost.
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 // Server-rendered, no client JS — a one-click unsubscribe link needs to work even if the
 // email client's in-app browser blocks scripts, and this is simple enough not to need any.
 // Estonian-only, matching the emails these links appear in (see login.ts/billing emails) —
@@ -37,10 +51,10 @@ function renderPage(prefs: EmailPreferences, uid: string, sig: string, message: 
     <div style="max-width:420px; margin:0 auto; background:#ffffff; border-radius:16px; padding:32px;">
       <div style="width:48px; height:48px; margin:0 auto 16px auto; background:#2e9bff; border-radius:12px; color:#ffffff; font-size:24px; font-weight:700; line-height:48px; text-align:center;">T</div>
       <h1 style="margin:0 0 4px 0; font-size:20px; font-weight:700; color:#1a1a1a; text-align:center;">Teeolud</h1>
-      <p style="color:#1a1a1a; font-size:15px; line-height:1.5; text-align:center; margin:16px 0;">${message}</p>
+      <p style="color:#1a1a1a; font-size:15px; line-height:1.5; text-align:center; margin:16px 0;">${escapeHtml(message)}</p>
       <form method="POST" action="/api/unsubscribe">
-        <input type="hidden" name="uid" value="${uid}" />
-        <input type="hidden" name="sig" value="${sig}" />
+        <input type="hidden" name="uid" value="${escapeHtml(uid)}" />
+        <input type="hidden" name="sig" value="${escapeHtml(sig)}" />
         ${checkbox("productUpdates")}
         ${checkbox("serviceAnnouncements")}
         ${checkbox("billing")}
