@@ -628,6 +628,34 @@ body,
   border-radius: 0.4rem;
 }
 
+.camera-modal-updated {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.6rem 0 0;
+  font-size: 0.78rem;
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.camera-modal-live-dot {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: var(--color-success);
+  flex-shrink: 0;
+  animation: camera-live-pulse 2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .camera-modal-live-dot { animation: none; }
+}
+
+@keyframes camera-live-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
 .camera-modal-close {
   position: absolute;
   top: 0.75rem;
@@ -721,7 +749,7 @@ body,
 }
 
 .weather-history-row {
-  padding: 0.5rem 0;
+  padding: 0.65rem 0;
   border-bottom: 1px solid var(--color-border);
   font-size: 0.85rem;
 }
@@ -730,20 +758,65 @@ body,
   border-bottom: none;
 }
 
+.weather-history-row-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.45rem;
+}
+
 .weather-history-row-time {
   color: var(--color-text-secondary);
   font-size: 0.8rem;
-  margin-bottom: 0.3rem;
+  font-variant-numeric: tabular-nums;
 }
 
-.weather-history-row-fields {
+.weather-history-surface-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+/* The two temperatures are this app's headline stat for a station (they're the chart's own
+   two plotted lines) — set apart from the secondary stats below by size and by reusing the
+   chart legend's exact gold/blue dot colors, so a row reads at a glance without re-reading
+   "Road temp:" / "Air temp:" every time. */
+.weather-history-row-temps {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.3rem 0.6rem;
+  gap: 1.25rem;
+  margin-bottom: 0.35rem;
 }
 
-.weather-history-field {
-  white-space: nowrap;
+.weather-history-temp {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.weather-history-temp-dot {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+  align-self: center;
+}
+
+.weather-history-temp-label {
+  font-size: 0.72rem;
+  font-weight: 400;
+  color: var(--color-text-secondary);
+}
+
+.weather-history-row-details {
+  font-size: 0.78rem;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
 }
 
 .account-header {

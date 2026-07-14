@@ -118,7 +118,9 @@
     "close": "Close",
     "loading": "Loading live image…",
     "paywalled": "Live camera images are a paid feature. Open the ⓘ menu to subscribe.",
-    "error": "Couldn't load this camera's image right now."
+    "error": "Couldn't load this camera's image right now.",
+    "updated": "Updated",
+    "updatedJustNow": "Updated just now"
   },
   "weatherHistoryModal": {
     "close": "Close",

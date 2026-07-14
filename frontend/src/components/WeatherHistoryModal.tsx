@@ -19,11 +19,19 @@ const ROAD_SURFACE_LABEL_KEY: Record<string, keyof PopupsSubsetT> = {
 };
 
 // Traffic-light scheme distinct from the chart's own air/road line colors, so the surface-dot
-// strip under the chart doesn't get confused with the temperature lines above it.
+// strip under the chart doesn't get confused with the temperature lines above it. Reused below
+// for each history row's own surface badge, so the same color always means the same thing
+// whether you're looking at the chart's dot row or the list underneath it.
 const ROAD_SURFACE_COLOR: Record<string, string> = {
   DRY: "var(--color-success)",
   MOIST: "var(--color-gold)",
   WET: "var(--color-danger)",
+};
+
+const ROAD_SURFACE_BG: Record<string, string> = {
+  DRY: "var(--color-success-bg)",
+  MOIST: "var(--color-gold-bg)",
+  WET: "var(--color-danger-bg)",
 };
 
 const PRECIPITATION_LABEL_KEY: Record<string, keyof PopupsSubsetT> = {
@@ -282,50 +290,56 @@ export function WeatherHistoryModal({ stationName, locale, onClose, t }: Weather
                 .map((r) => {
                   const surfaceKey = ROAD_SURFACE_LABEL_KEY[r.roadStatus ?? ""];
                   const precipKey = PRECIPITATION_LABEL_KEY[r.precipitationType ?? ""];
+                  // Secondary stats read as a single "·"-separated line rather than each
+                  // getting equal visual weight with the two temperatures above them.
+                  const details: string[] = [];
+                  if (typeof r.windSpeed === "number") details.push(`${t.popups.wind} ${r.windSpeed.toFixed(1)} m/s`);
+                  if (typeof r.airHumidity === "number") details.push(`${t.popups.humidity} ${Math.round(r.airHumidity)}%`);
+                  if (typeof r.visibility === "number") details.push(`${t.popups.visibility} ${formatVisibility(r.visibility)}`);
+                  if (precipKey) {
+                    const intensity =
+                      typeof r.precipitationIntensity === "number" && r.precipitationIntensity > 0
+                        ? ` (${r.precipitationIntensity.toFixed(1)} mm/h)`
+                        : "";
+                    details.push(`${t.popups[precipKey]}${intensity}`);
+                  }
+                  if (typeof r.gripFactor === "number") details.push(`${t.popups.grip} ${r.gripFactor.toFixed(2)}`);
+
                   return (
                     <li key={r.recordedAt} class="weather-history-row">
-                      <div class="weather-history-row-time">{formatDateTime(r.recordedAt, locale)}</div>
-                      <div class="weather-history-row-fields">
-                        {typeof r.roadTemp === "number" && (
-                          <span class="weather-history-field">
-                            {t.popups.roadTemp}: {r.roadTemp.toFixed(1)}°C
-                          </span>
-                        )}
-                        {typeof r.airTemp === "number" && (
-                          <span class="weather-history-field">
-                            {t.popups.airTemp}: {r.airTemp.toFixed(1)}°C
-                          </span>
-                        )}
-                        {surfaceKey && <span class="weather-history-field">{t.popups[surfaceKey]}</span>}
-                        {typeof r.windSpeed === "number" && (
-                          <span class="weather-history-field">
-                            {t.popups.wind}: {r.windSpeed.toFixed(1)} m/s
-                          </span>
-                        )}
-                        {typeof r.airHumidity === "number" && (
-                          <span class="weather-history-field">
-                            {t.popups.humidity}: {Math.round(r.airHumidity)}%
-                          </span>
-                        )}
-                        {typeof r.visibility === "number" && (
-                          <span class="weather-history-field">
-                            {t.popups.visibility}: {formatVisibility(r.visibility)}
-                          </span>
-                        )}
-                        {precipKey && (
-                          <span class="weather-history-field">
-                            {t.popups[precipKey]}
-                            {typeof r.precipitationIntensity === "number" && r.precipitationIntensity > 0
-                              ? ` (${r.precipitationIntensity.toFixed(1)} mm/h)`
-                              : ""}
-                          </span>
-                        )}
-                        {typeof r.gripFactor === "number" && (
-                          <span class="weather-history-field">
-                            {t.popups.grip}: {r.gripFactor.toFixed(2)}
+                      <div class="weather-history-row-header">
+                        <span class="weather-history-row-time">{formatDateTime(r.recordedAt, locale)}</span>
+                        {surfaceKey && (
+                          <span
+                            class="weather-history-surface-badge"
+                            style={{
+                              color: ROAD_SURFACE_COLOR[r.roadStatus ?? ""],
+                              background: ROAD_SURFACE_BG[r.roadStatus ?? ""],
+                            }}
+                          >
+                            {t.popups[surfaceKey]}
                           </span>
                         )}
                       </div>
+                      <div class="weather-history-row-temps">
+                        {typeof r.roadTemp === "number" && (
+                          <span class="weather-history-temp">
+                            <span class="weather-history-temp-dot" style={{ background: "var(--color-gold)" }} />
+                            {r.roadTemp.toFixed(1)}°C
+                            <span class="weather-history-temp-label">{t.popups.roadTemp}</span>
+                          </span>
+                        )}
+                        {typeof r.airTemp === "number" && (
+                          <span class="weather-history-temp">
+                            <span class="weather-history-temp-dot" style={{ background: "var(--color-accent)" }} />
+                            {r.airTemp.toFixed(1)}°C
+                            <span class="weather-history-temp-label">{t.popups.airTemp}</span>
+                          </span>
+                        )}
+                      </div>
+                      {details.length > 0 && (
+                        <div class="weather-history-row-details">{details.join(" · ")}</div>
+                      )}
                     </li>
                   );
                 })}

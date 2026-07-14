@@ -118,7 +118,9 @@
     "close": "Sulge",
     "loading": "Otsepildi laadimine…",
     "paywalled": "Otsepilt on tasuline funktsioon. Tellimiseks ava ⓘ menüü.",
-    "error": "Selle kaamera pilti ei õnnestunud praegu laadida."
+    "error": "Selle kaamera pilti ei õnnestunud praegu laadida.",
+    "updated": "Uuendatud",
+    "updatedJustNow": "Just uuendatud"
   },
   "weatherHistoryModal": {
     "close": "Sulge",

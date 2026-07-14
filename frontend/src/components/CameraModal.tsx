@@ -3,7 +3,7 @@ import { fetchCameraImage } from "../lib/api";
 
 type LoadState =
   | { status: "loading" }
-  | { status: "ready"; objectUrl: string }
+  | { status: "ready"; objectUrl: string; updatedAt: number }
   | { status: "paywalled" }
   | { status: "error" };
 
@@ -17,42 +17,72 @@ interface CameraModalProps {
       loading: string;
       paywalled: string;
       error: string;
+      updated: string;
+      updatedJustNow: string;
     };
   };
 }
 
+// Matches api-worker's own edge-cache TTL for this image (see cameras.ts) — polling faster
+// than that would just re-fetch the same cached bytes, not get anything fresher.
+const REFRESH_INTERVAL_MS = 60_000;
+
 export function CameraModal({ cameraId, cameraName, onClose, t }: CameraModalProps) {
   const [state, setState] = useState<LoadState>({ status: "loading" });
+  // Ticks once a second purely to re-render the "updated Xs ago" caption — the timestamp
+  // itself lives in state, this just forces the relative-time string to recompute.
+  const [, setTick] = useState(0);
 
   useEffect(() => {
-    let objectUrl: string | undefined;
+    let currentObjectUrl: string | undefined;
     let cancelled = false;
 
+    function load() {
+      fetchCameraImage(cameraId)
+        .then(async (res) => {
+          if (cancelled) return;
+          if (res.status === 402) {
+            setState({ status: "paywalled" });
+            return;
+          }
+          if (!res.ok) {
+            // A refresh that fails shouldn't blank out a perfectly good image already on
+            // screen — only surface as an error if this was the first load.
+            setState((current) => (current.status === "ready" ? current : { status: "error" }));
+            return;
+          }
+          const blob = await res.blob();
+          const nextUrl = URL.createObjectURL(blob);
+          const previousUrl = currentObjectUrl;
+          currentObjectUrl = nextUrl;
+          setState({ status: "ready", objectUrl: nextUrl, updatedAt: Date.now() });
+          // Only after the new image is committed to state — revoking sooner risks the <img>
+          // briefly pointing at a dead blob URL mid-swap.
+          if (previousUrl) URL.revokeObjectURL(previousUrl);
+        })
+        .catch(() => {
+          if (!cancelled) setState((current) => (current.status === "ready" ? current : { status: "error" }));
+        });
+    }
+
     setState({ status: "loading" });
-    fetchCameraImage(cameraId)
-      .then(async (res) => {
-        if (cancelled) return;
-        if (res.status === 402) {
-          setState({ status: "paywalled" });
-          return;
-        }
-        if (!res.ok) {
-          setState({ status: "error" });
-          return;
-        }
-        const blob = await res.blob();
-        objectUrl = URL.createObjectURL(blob);
-        setState({ status: "ready", objectUrl });
-      })
-      .catch(() => {
-        if (!cancelled) setState({ status: "error" });
-      });
+    load();
+    const refreshInterval = setInterval(load, REFRESH_INTERVAL_MS);
+    const tickInterval = setInterval(() => setTick((n) => n + 1), 1000);
 
     return () => {
       cancelled = true;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      clearInterval(refreshInterval);
+      clearInterval(tickInterval);
+      if (currentObjectUrl) URL.revokeObjectURL(currentObjectUrl);
     };
   }, [cameraId]);
+
+  function formatUpdated(updatedAt: number): string {
+    const seconds = Math.max(0, Math.round((Date.now() - updatedAt) / 1000));
+    if (seconds < 5) return t.cameraModal.updatedJustNow;
+    return `${t.cameraModal.updated} ${seconds}s`;
+  }
 
   return (
     <div class="camera-modal-overlay" onClick={onClose}>
@@ -108,7 +138,15 @@ export function CameraModal({ cameraId, cameraName, onClose, t }: CameraModalPro
           </div>
         )}
 
-        {state.status === "ready" && <img class="camera-modal-image" src={state.objectUrl} alt={cameraName} />}
+        {state.status === "ready" && (
+          <>
+            <img class="camera-modal-image" src={state.objectUrl} alt={cameraName} />
+            <p class="camera-modal-updated">
+              <span class="camera-modal-live-dot" aria-hidden="true" />
+              {formatUpdated(state.updatedAt)}
+            </p>
+          </>
+        )}
       </div>
     </div>
   );
