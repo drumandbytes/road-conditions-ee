@@ -77,6 +77,7 @@ interface InfoPanelProps {
       issueTitle: string;
       issueBody: string;
       issueLink: string;
+      reportIssueLink: string;
     };
     account: {
       title: string;
@@ -128,26 +129,32 @@ export function InfoPanel({
       {open && (
         <div class="info-overlay" onClick={() => onOpenChange(false)}>
           <div class="info-panel" onClick={(e) => e.stopPropagation()}>
-            <button
-              type="button"
-              class="info-panel-close"
-              onClick={() => onOpenChange(false)}
-              aria-label={t.info.close}
-            >
-              ×
-            </button>
+            <div class="info-panel-header">
+              <div class="locale-toggle" role="group">
+                {(["et", "en"] as const).map((l) => (
+                  <button
+                    key={l}
+                    type="button"
+                    class={l === locale ? "locale-button locale-button-active" : "locale-button"}
+                    onClick={() => onLocaleChange(l)}
+                  >
+                    {l.toUpperCase()}
+                  </button>
+                ))}
+              </div>
 
-            <div class="locale-toggle" role="group">
-              {(["et", "en"] as const).map((l) => (
-                <button
-                  key={l}
-                  type="button"
-                  class={l === locale ? "locale-button locale-button-active" : "locale-button"}
-                  onClick={() => onLocaleChange(l)}
-                >
-                  {l.toUpperCase()}
-                </button>
-              ))}
+              <a class="report-bug-chip" href={ISSUE_LINK} target="_blank" rel="noopener noreferrer">
+                {t.info.reportIssueLink}
+              </a>
+
+              <button
+                type="button"
+                class="info-panel-close"
+                onClick={() => onOpenChange(false)}
+                aria-label={t.info.close}
+              >
+                ×
+              </button>
             </div>
 
             {subview === "about" && (

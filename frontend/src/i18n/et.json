@@ -115,7 +115,8 @@
     "supportLink": "osta mulle kohvi",
     "issueTitle": "Leidsid vea?",
     "issueBody": "Teesilm on avatud lähtekoodiga. Vigadest või puudulikest andmetest anna teada GitHubis:",
-    "issueLink": "anna veast teada"
+    "issueLink": "anna veast teada",
+    "reportIssueLink": "Anna veast teada"
   },
   "cameraModal": {
     "close": "Sulge",

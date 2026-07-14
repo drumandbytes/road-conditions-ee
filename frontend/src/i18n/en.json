@@ -115,7 +115,8 @@
     "supportLink": "buy me a coffee",
     "issueTitle": "Found a bug?",
     "issueBody": "Teesilm is open source. Report bugs or missing data on GitHub:",
-    "issueLink": "report an issue"
+    "issueLink": "report an issue",
+    "reportIssueLink": "Report an issue"
   },
   "cameraModal": {
     "close": "Close",
