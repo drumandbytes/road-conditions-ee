@@ -36,6 +36,23 @@ interface InfoPanelProps {
       aboutTitle: string;
       aboutBody: string;
       aboutBodyExtra: string;
+      guideLink: string;
+      guideUsingMapTitle: string;
+      guideUsingMap1: string;
+      guideUsingMap2: string;
+      guideUsingMap3: string;
+      guideUsingMap4: string;
+      guideAlertsTitle: string;
+      guideAlertsBody1: string;
+      guideAlertsBody2: string;
+      guideAlertsBody3: string;
+      guideAlertsBody4: string;
+      guideFreeVsPaidTitle: string;
+      guideFreeVsPaidBody: string;
+      guideAccountTitle: string;
+      guideAccountBody1: string;
+      guideAccountBody2: string;
+      guideAccountBody3: string;
       legendTitle: string;
       legendWeatherStationsTitle: string;
       legendWeatherStationsDesc: string;
@@ -97,7 +114,7 @@ export function InfoPanel({
   onAddSavedPoint,
 }: InfoPanelProps) {
   const [tab, setTab] = useState<Tab>("info");
-  const [showAbout, setShowAbout] = useState(false);
+  const [subview, setSubview] = useState<"none" | "about" | "guide">("none");
 
   return (
     <>
@@ -129,9 +146,9 @@ export function InfoPanel({
               ))}
             </div>
 
-            {showAbout ? (
+            {subview === "about" && (
               <>
-                <button type="button" class="back-link" onClick={() => setShowAbout(false)}>
+                <button type="button" class="back-link" onClick={() => setSubview("none")}>
                   ← {t.info.backButton}
                 </button>
 
@@ -149,7 +166,39 @@ export function InfoPanel({
                   />
                 </a>
               </>
-            ) : (
+            )}
+
+            {subview === "guide" && (
+              <>
+                <button type="button" class="back-link" onClick={() => setSubview("none")}>
+                  ← {t.info.backButton}
+                </button>
+
+                <h2>{t.info.guideUsingMapTitle}</h2>
+                <ol class="steps-list">
+                  <li>{t.info.guideUsingMap1}</li>
+                  <li>{t.info.guideUsingMap2}</li>
+                  <li>{t.info.guideUsingMap3}</li>
+                  <li>{t.info.guideUsingMap4}</li>
+                </ol>
+
+                <h2>{t.info.guideAlertsTitle}</h2>
+                <p>{t.info.guideAlertsBody1}</p>
+                <p>{t.info.guideAlertsBody2}</p>
+                <p>{t.info.guideAlertsBody3}</p>
+                <p>{t.info.guideAlertsBody4}</p>
+
+                <h2>{t.info.guideFreeVsPaidTitle}</h2>
+                <p>{t.info.guideFreeVsPaidBody}</p>
+
+                <h2>{t.info.guideAccountTitle}</h2>
+                <p>{t.info.guideAccountBody1}</p>
+                <p>{t.info.guideAccountBody2}</p>
+                <p>{t.info.guideAccountBody3}</p>
+              </>
+            )}
+
+            {subview === "none" && (
               <>
                 <div class="panel-tabs" role="tablist">
                   {(
@@ -207,7 +256,10 @@ export function InfoPanel({
                   />
                 )}
 
-                <button type="button" class="about-link" onClick={() => setShowAbout(true)}>
+                <button type="button" class="about-link" onClick={() => setSubview("guide")}>
+                  {t.info.guideLink}
+                </button>
+                <button type="button" class="about-link" onClick={() => setSubview("about")}>
                   {t.info.aboutLink}
                 </button>
               </>
