@@ -112,7 +112,10 @@
     "dataTitle": "Andmed ja viited",
     "supportTitle": "Toeta",
     "supportBody": "Kui sellest on sulle kasu, võid:",
-    "supportLink": "osta mulle kohvi"
+    "supportLink": "osta mulle kohvi",
+    "issueTitle": "Leidsid vea?",
+    "issueBody": "Teesilm on avatud lähtekoodiga. Vigadest või puudulikest andmetest anna teada GitHubis:",
+    "issueLink": "anna veast teada"
   },
   "cameraModal": {
     "close": "Sulge",

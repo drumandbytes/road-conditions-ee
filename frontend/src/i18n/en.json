@@ -112,7 +112,10 @@
     "dataTitle": "Data & attribution",
     "supportTitle": "Support",
     "supportBody": "If this is useful to you, you can:",
-    "supportLink": "buy me a coffee"
+    "supportLink": "buy me a coffee",
+    "issueTitle": "Found a bug?",
+    "issueBody": "Teesilm is open source. Report bugs or missing data on GitHub:",
+    "issueLink": "report an issue"
   },
   "cameraModal": {
     "close": "Close",

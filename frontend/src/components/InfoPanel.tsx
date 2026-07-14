@@ -7,6 +7,7 @@ import type { SavedPointsSectionT } from "./SavedPointsSection";
 import type { SignInFormT } from "./SignInForm";
 
 const COFFEE_LINK = "https://buymeacoffee.com/justmaris";
+const ISSUE_LINK = "https://github.com/drumandbytes/road-conditions-ee/issues/new";
 
 export type Locale = "et" | "en";
 type Tab = "info" | "account";
@@ -73,6 +74,9 @@ interface InfoPanelProps {
       supportTitle: string;
       supportBody: string;
       supportLink: string;
+      issueTitle: string;
+      issueBody: string;
+      issueLink: string;
     };
     account: {
       title: string;
@@ -165,6 +169,14 @@ export function InfoPanel({
                     alt={t.info.supportLink}
                   />
                 </a>
+
+                <h2>{t.info.issueTitle}</h2>
+                <p>
+                  {t.info.issueBody}{" "}
+                  <a href={ISSUE_LINK} target="_blank" rel="noopener noreferrer">
+                    {t.info.issueLink}
+                  </a>
+                </p>
               </>
             )}
 
