@@ -53,7 +53,7 @@ export async function handleCheckout(request: Request, env: { STRIPE_SECRET_KEY?
       {
         price_data: {
           currency: "eur",
-          product_data: { name: `Teeolud paid tier (${body.plan})` },
+          product_data: { name: `Teesilm paid tier (${body.plan})` },
           unit_amount: plan.amountEurCents,
           recurring: { interval: plan.interval },
         },

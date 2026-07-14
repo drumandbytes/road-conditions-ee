@@ -1,6 +1,6 @@
 {
-  "name": "Teeolud — Road Conditions EE",
-  "short_name": "Teeolud",
+  "name": "Teesilm — Eesti teeolud",
+  "short_name": "Teesilm",
   "description": "Live Estonian road weather, camera, and hazard map with precise location-based alerts.",
   "start_url": "/",
   "display": "standalone",

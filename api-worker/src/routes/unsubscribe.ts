@@ -45,12 +45,12 @@ function renderPage(prefs: EmailPreferences, uid: string, sig: string, message: 
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Teavituste eelistused — Teeolud</title>
+    <title>Teavituste eelistused — Teesilm</title>
   </head>
   <body style="margin:0; padding:32px 16px; background:#f0f0f3; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
     <div style="max-width:420px; margin:0 auto; background:#ffffff; border-radius:16px; padding:32px;">
       <div style="width:48px; height:48px; margin:0 auto 16px auto; background:#2e9bff; border-radius:12px; color:#ffffff; font-size:24px; font-weight:700; line-height:48px; text-align:center;">T</div>
-      <h1 style="margin:0 0 4px 0; font-size:20px; font-weight:700; color:#1a1a1a; text-align:center;">Teeolud</h1>
+      <h1 style="margin:0 0 4px 0; font-size:20px; font-weight:700; color:#1a1a1a; text-align:center;">Teesilm</h1>
       <p style="color:#1a1a1a; font-size:15px; line-height:1.5; text-align:center; margin:16px 0;">${escapeHtml(message)}</p>
       <form method="POST" action="/api/unsubscribe">
         <input type="hidden" name="uid" value="${escapeHtml(uid)}" />

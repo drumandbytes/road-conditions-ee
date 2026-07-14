@@ -35,7 +35,7 @@ export function buildEmailHtml(params: {
             <tr>
               <td style="padding:36px 32px 8px 32px; text-align:center;">
                 <div style="width:48px; height:48px; margin:0 auto 16px auto; background:#2e9bff; border-radius:12px; color:#ffffff; font-size:24px; font-weight:700; line-height:48px;">T</div>
-                <h1 style="margin:0; font-size:20px; font-weight:700; color:#1a1a1a;">Teeolud</h1>
+                <h1 style="margin:0; font-size:20px; font-weight:700; color:#1a1a1a;">Teesilm</h1>
               </td>
             </tr>
             <tr>

@@ -961,7 +961,7 @@ describe("handleRequestLogin", () => {
     expect(email.send).toHaveBeenCalledTimes(1);
     const [sent] = email.send.mock.calls[0];
     expect(sent.to).toBe("a@b.com");
-    expect(sent.from).toEqual({ email: "noreply@drumandbytes.ee", name: "Teeolud" });
+    expect(sent.from).toEqual({ email: "noreply@drumandbytes.ee", name: "Teesilm" });
   });
 
   it("responds ok but skips sending once the rate limit is hit", async () => {

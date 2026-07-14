@@ -48,9 +48,9 @@ export async function handleRequestLogin(request: Request, env: { DB: D1Database
       const link = `${FRONTEND_URL}/?login_token=${token}`;
       try {
         await env.EMAIL.send({
-          from: { email: FROM_ADDRESS, name: "Teeolud" },
+          from: { email: FROM_ADDRESS, name: "Teesilm" },
           to: email,
-          subject: "Sisselogimislink — Teeolud",
+          subject: "Sisselogimislink — Teesilm",
           text:
             `Sisselogimiseks vajuta lingile (kehtib ${LOGIN_TOKEN_TTL_MINUTES} minutit):\n\n${link}\n\n` +
             "Kui sa seda ise ei küsinud, võid selle kirja lihtsalt eirata.",

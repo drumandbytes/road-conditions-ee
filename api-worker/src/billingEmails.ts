@@ -24,8 +24,8 @@ async function sendBillingEmail(
   const prefs = await getEmailPreferences(env.DB, user.id);
   if (!prefs.billing) return;
 
-  let footerHtml = '<p style="margin:0;">See on automaatne teade sinu Teeolud tellimuse kohta.</p>';
-  let footerText = "See on automaatne teade sinu Teeolud tellimuse kohta.";
+  let footerHtml = '<p style="margin:0;">See on automaatne teade sinu Teesilm tellimuse kohta.</p>';
+  let footerText = "See on automaatne teade sinu Teesilm tellimuse kohta.";
   if (env.UNSUBSCRIBE_SECRET) {
     const unsubscribeLink = await buildUnsubscribeLink(env.UNSUBSCRIBE_SECRET, user.id, "billing");
     footerHtml += `<p style="margin:8px 0 0 0;"><a href="${unsubscribeLink}" style="color:#6e6e73;">Halda teavituste eelistusi</a></p>`;
@@ -34,7 +34,7 @@ async function sendBillingEmail(
 
   try {
     await env.EMAIL.send({
-      from: { email: FROM_ADDRESS, name: "Teeolud" },
+      from: { email: FROM_ADDRESS, name: "Teesilm" },
       to: user.email,
       subject,
       text: `${introText}\n\n${button.label}: ${button.href}\n\n${footerText}`,
@@ -51,8 +51,8 @@ export async function sendRenewalReminderEmail(
   amountEur: string,
   renewalDate: string,
 ): Promise<void> {
-  const text = `Sinu Teeolud tellimus pikeneb ${renewalDate}, summas ${amountEur}.`;
-  await sendBillingEmail(env, user, "Tellimuse pikendamine — Teeolud", `<p style="margin:16px 0;">${text}</p>`, text, {
+  const text = `Sinu Teesilm tellimus pikeneb ${renewalDate}, summas ${amountEur}.`;
+  await sendBillingEmail(env, user, "Tellimuse pikendamine — Teesilm", `<p style="margin:16px 0;">${text}</p>`, text, {
     label: "Halda tellimust",
     href: `${FRONTEND_URL}/`,
   });
@@ -60,7 +60,7 @@ export async function sendRenewalReminderEmail(
 
 export async function sendPaymentFailedEmail(env: BillingEmailEnv, user: UserRow): Promise<void> {
   const text = "Sinu viimane makse ebaõnnestus. Palun uuenda oma maksevahendit, et tellimus jätkuks katkestuseta.";
-  await sendBillingEmail(env, user, "Makse ebaõnnestus — Teeolud", `<p style="margin:16px 0;">${text}</p>`, text, {
+  await sendBillingEmail(env, user, "Makse ebaõnnestus — Teesilm", `<p style="margin:16px 0;">${text}</p>`, text, {
     label: "Uuenda maksevahendit",
     href: `${FRONTEND_URL}/`,
   });
@@ -68,8 +68,8 @@ export async function sendPaymentFailedEmail(env: BillingEmailEnv, user: UserRow
 
 export async function sendSubscriptionEndedEmail(env: BillingEmailEnv, user: UserRow): Promise<void> {
   const text =
-    "Sinu Teeolud tellimus on lõppenud. Otsepildid kaameratest, liiklusmärkide reaalajas info ja teised tasulised funktsioonid ei ole enam saadaval.";
-  await sendBillingEmail(env, user, "Tellimus on lõppenud — Teeolud", `<p style="margin:16px 0;">${text}</p>`, text, {
+    "Sinu Teesilm tellimus on lõppenud. Otsepildid kaameratest, liiklusmärkide reaalajas info ja teised tasulised funktsioonid ei ole enam saadaval.";
+  await sendBillingEmail(env, user, "Tellimus on lõppenud — Teesilm", `<p style="margin:16px 0;">${text}</p>`, text, {
     label: "Telli uuesti",
     href: `${FRONTEND_URL}/`,
   });
