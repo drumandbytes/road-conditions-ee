@@ -145,19 +145,21 @@ export function AccountPanel({ t, savedPointsRefreshKey, onAddSavedPoint }: Acco
               </button>
             ))}
           </div>
-          <p class="account-trial-note">{t.account.trialNote}</p>
-          <label class="category-item">
-            <input
-              type="checkbox"
-              checked={productUpdatesOptIn}
-              onChange={() => setProductUpdatesOptIn((v) => !v)}
-            />
-            <span class="category-item-text">
-              <span class="category-item-label">{t.account.productUpdatesOptInLabel}</span>
-            </span>
-          </label>
-          <FeatureComparisonTable t={t.account} />
-          <SignInForm t={t.signIn} />
+          <div class="account-signup-extras">
+            <p class="account-trial-note">{t.account.trialNote}</p>
+            <label class="category-item">
+              <input
+                type="checkbox"
+                checked={productUpdatesOptIn}
+                onChange={() => setProductUpdatesOptIn((v) => !v)}
+              />
+              <span class="category-item-text">
+                <span class="category-item-label">{t.account.productUpdatesOptInLabel}</span>
+              </span>
+            </label>
+            <FeatureComparisonTable t={t.account} />
+            <SignInForm t={t.signIn} />
+          </div>
         </>
       )}
 

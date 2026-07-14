@@ -884,20 +884,37 @@ body,
   color: var(--color-text-secondary);
 }
 
+/* Everything below the plan cards on the signed-out screen (trial note, consent checkbox,
+   comparison table, sign-in link/form) used to rely on each element's own ad-hoc margin —
+   a browser-default <p> margin here, a margin-top-only rule there, zero margin elsewhere —
+   which produced visibly inconsistent gaps between them. A single flex gap on this wrapper,
+   with each child's own margin reset to 0, replaces all of that with one consistent rhythm. */
+.account-signup-extras {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.account-signup-extras > p,
+.account-signup-extras .feature-comparison,
+.account-signup-extras .account-link-button,
+.account-signup-extras .sign-in-form {
+  margin: 0;
+}
+
 .feature-comparison {
-  margin: 1rem 0;
+  margin: 0;
 }
 
 .feature-comparison-toggle {
+  display: block;
+  border: none;
+  background: none;
+  padding: 0;
   color: var(--color-text-secondary);
   font-size: 0.85rem;
   text-decoration: underline;
   cursor: pointer;
-  list-style: none;
-}
-
-.feature-comparison-toggle::-webkit-details-marker {
-  display: none;
 }
 
 .feature-comparison-table {

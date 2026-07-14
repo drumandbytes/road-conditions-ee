@@ -128,6 +128,7 @@
     "error": "Something went wrong. Try again in a moment.",
     "signedInAs": "Signed in as",
     "comparisonToggle": "Compare free vs. paid",
+    "comparisonHideToggle": "Hide comparison",
     "comparisonFreeHeader": "Free",
     "comparisonPaidHeader": "Paid",
     "comparisonWeatherReadings": "Live weather station readings",
