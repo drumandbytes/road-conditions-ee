@@ -729,6 +729,10 @@ export function Map({
     function initMap() {
       map = new maplibregl.Map({
         container,
+        // Forces the small icon-only attribution rather than MapLibre's default, which can
+        // expand to a full-width text bar and overlap the info button at very narrow
+        // (foldable-phone) viewport widths — confirmed via direct measurement at 280px.
+        attributionControl: { compact: true },
         style: {
           version: 8,
           glyphs: "https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf",

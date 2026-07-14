@@ -93,8 +93,9 @@ body,
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 2rem;
-  height: 2rem;
+  /* 44px comfort minimum (Apple HIG / WCAG 2.5.5) — was 32px */
+  width: 2.75rem;
+  height: 2.75rem;
   flex-shrink: 0;
   border: none;
   border-radius: 50%;
@@ -156,8 +157,9 @@ body,
   bottom: 1rem;
   left: 1rem;
   z-index: 10;
-  width: 2.5rem;
-  height: 2.5rem;
+  /* 44px comfort minimum (Apple HIG / WCAG 2.5.5) — was 40px */
+  width: 2.75rem;
+  height: 2.75rem;
   border-radius: 50%;
   border: none;
   background: var(--color-bg);
@@ -178,7 +180,7 @@ body,
 }
 
 /* Stacked directly above .info-button (same left offset, bottom offset = info-button's own
-   1rem + its 2.5rem height + a 0.75rem gap) — top-right is MapLibre's zoom/geolocate
+   1rem + its 2.75rem height + a 0.75rem gap) — top-right is MapLibre's zoom/geolocate
    controls and bottom-right is its default attribution control (confirmed colliding when this
    lived there), so this is the one spot that both stays clear of everything else and reads as
    grouped with the other map-level control rather than floating alone in a corner. A separate,
@@ -186,14 +188,15 @@ body,
    be a one-tap action, not a detour through the tabs/legend-descriptions/about-link panel. */
 .layer-menu {
   position: absolute;
-  bottom: 4.25rem;
+  bottom: 4.5rem;
   left: 1rem;
   z-index: 10;
 }
 
 .layer-menu-button {
-  width: 2.5rem;
-  height: 2.5rem;
+  /* 44px comfort minimum (Apple HIG / WCAG 2.5.5) — was 40px */
+  width: 2.75rem;
+  height: 2.75rem;
   border-radius: 50%;
   border: none;
   background: var(--color-bg);
@@ -219,7 +222,10 @@ body,
   bottom: calc(100% + 0.5rem);
   left: 0;
   z-index: 15;
-  min-width: 190px;
+  /* Wide enough that the longest label ("Roadworks & restrictions" / "Electronic road
+     signs") stays on one line — a narrower popover let long English labels wrap while
+     shorter ones didn't, giving the checklist visibly uneven row heights. */
+  min-width: 260px;
   background: var(--color-bg);
   color: var(--color-text);
   border-radius: var(--radius-md);
