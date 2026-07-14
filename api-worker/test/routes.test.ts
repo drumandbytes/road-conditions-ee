@@ -274,6 +274,17 @@ describe("CORS", () => {
     const headers = corsHeaders("https://road-conditions-ee.pages.dev");
     expect(headers["Access-Control-Allow-Origin"]).not.toBe("*");
   });
+
+  it("allows every HTTP method an actual route uses", () => {
+    // Regression coverage: PATCH /api/email-preferences was silently CORS-blocked because this
+    // list wasn't updated when that route was added — the request never even reached the
+    // handler, so no server-side test caught it. Every method actually used by index.ts's
+    // routes must appear here.
+    const methods = corsHeaders("https://roadconditions.drumandbytes.ee")["Access-Control-Allow-Methods"];
+    for (const method of ["GET", "POST", "PATCH", "DELETE"]) {
+      expect(methods).toContain(method);
+    }
+  });
 });
 
 describe("authenticatePaidUser", () => {
