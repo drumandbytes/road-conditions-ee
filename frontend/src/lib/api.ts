@@ -23,7 +23,16 @@ async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
   const token = getBearerToken();
   const headers = new Headers(init?.headers);
   if (token) headers.set("Authorization", `Bearer ${token}`);
-  return fetch(`${API_BASE}${path}`, { ...init, headers });
+  try {
+    return await fetch(`${API_BASE}${path}`, { ...init, headers });
+  } catch (err) {
+    // fetch() itself throws on a network failure (offline, DNS, etc.) — a real, expected case
+    // in a PWA. Every caller in this file already handles `!res.ok` (returning null/[] or
+    // throwing a clean message), so synthesizing a failed Response here means that existing
+    // handling covers network failures too, instead of an unhandled promise rejection.
+    console.error(`[api] request failed for ${path}:`, err instanceof Error ? err.message : err);
+    return new Response(null, { status: 503, statusText: "Network error" });
+  }
 }
 
 export async function getWeatherStations(): Promise<GeoJSON.FeatureCollection> {
@@ -222,4 +231,13 @@ export async function registerPushSubscription(subscription: PushSubscriptionKey
     body: JSON.stringify(subscription),
   });
   if (!res.ok) throw new Error("Failed to register push subscription");
+}
+
+export async function unregisterPushSubscription(endpoint: string): Promise<void> {
+  const res = await apiFetch("/api/push-subscription", {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ endpoint }),
+  });
+  if (!res.ok) throw new Error("Failed to remove push subscription");
 }

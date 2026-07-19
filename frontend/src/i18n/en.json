@@ -183,6 +183,8 @@
     "pushEnableButton": "Enable notifications",
     "pushEnabling": "Enabling…",
     "pushEnabled": "Notifications are on.",
+    "pushDisableButton": "Turn off notifications",
+    "pushDisabling": "Turning off…",
     "pushDenied": "Notifications are blocked in your browser settings.",
     "pushUnsupported": "Push notifications aren't supported in this browser.",
     "pushEnableError": "Couldn't enable notifications. Try again.",

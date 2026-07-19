@@ -796,22 +796,51 @@ export function Map({
         Promise.all(
           (Object.keys(ICON_SVG) as (keyof typeof ICON_SVG)[]).map((key) => loadMapImage(map!, key, ICON_SVG[key])),
         )
-          .then(() => Promise.all([getWeatherStations(), getCameras(), getHazards(), getRestrictions()]))
+          .then(() =>
+            // Each settled independently (same isolation VMS already gets below) — one layer's
+            // endpoint failing shouldn't blank the other three down to an empty basemap with
+            // no indication anything's wrong.
+            Promise.all([
+              getWeatherStations().catch((err) => {
+                console.error("Failed to load weather stations layer", err);
+                return null;
+              }),
+              getCameras().catch((err) => {
+                console.error("Failed to load cameras layer", err);
+                return null;
+              }),
+              getHazards().catch((err) => {
+                console.error("Failed to load hazards layer", err);
+                return null;
+              }),
+              getRestrictions().catch((err) => {
+                console.error("Failed to load restrictions layer", err);
+                return null;
+              }),
+            ]),
+          )
           .then(([weatherStations, cameras, hazards, restrictions]) => {
-            const addedLayerIds: (keyof typeof CLUSTER_LAYER_PAINT)[] = [
-              "weatherStations",
-              "cameras",
-              "hazards",
-              "restrictions",
-            ];
-            addClusteredSource(map!, "weatherStations", weatherStations, {
-              visible: visibleLayersRef.current.weatherStations,
-            });
-            addClusteredSource(map!, "cameras", cameras, { visible: visibleLayersRef.current.cameras });
-            addClusteredSource(map!, "hazards", hazards, { visible: visibleLayersRef.current.hazards });
-            addClusteredSource(map!, "restrictions", restrictions, {
-              visible: visibleLayersRef.current.restrictions,
-            });
+            const addedLayerIds: (keyof typeof CLUSTER_LAYER_PAINT)[] = [];
+            if (weatherStations) {
+              addClusteredSource(map!, "weatherStations", weatherStations, {
+                visible: visibleLayersRef.current.weatherStations,
+              });
+              addedLayerIds.push("weatherStations");
+            }
+            if (cameras) {
+              addClusteredSource(map!, "cameras", cameras, { visible: visibleLayersRef.current.cameras });
+              addedLayerIds.push("cameras");
+            }
+            if (hazards) {
+              addClusteredSource(map!, "hazards", hazards, { visible: visibleLayersRef.current.hazards });
+              addedLayerIds.push("hazards");
+            }
+            if (restrictions) {
+              addClusteredSource(map!, "restrictions", restrictions, {
+                visible: visibleLayersRef.current.restrictions,
+              });
+              addedLayerIds.push("restrictions");
+            }
             // Fetched separately from the four free layers above so its own failure (a genuine
             // network/server error — resolved to null, not thrown, by getVmsSigns; a
             // free/unauthenticated caller still gets a real 200 now, just with reduced

@@ -139,4 +139,41 @@ describe("tarktee.ts", () => {
     expect(hazards).toEqual([]);
     expect(fetchMock).not.toHaveBeenCalled();
   });
+
+  // Regression test: externalId is a NOT NULL D1 primary key — a record with neither its own
+  // id nor a fallback situation id must be skipped, not passed through as `undefined` (which
+  // would fail the whole batch write for every hazard type fetched that cycle, not just this
+  // record — see db.ts's upsertHazardsAndGetChanged).
+  it("skips a situation record with no usable id instead of producing an undefined externalId", async () => {
+    const fetchMock = mockFetchOnceJson({
+      situation: [
+        {
+          // situation.id itself missing too, not just situationRecord[].id
+          situationRecord: [
+            {
+              groupOfLocations: { locationForDisplay: { latitude: 59.4, longitude: 24.7 } },
+            },
+          ],
+        },
+      ],
+      lang: "et",
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const hazards = await fetchHazards("test-key-123", "slippery");
+
+    expect(hazards).toEqual([]);
+  });
+
+  it("logs an error when 0 cameras are parsed from a non-trivial response (likely a schema change, not genuinely zero cameras)", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const fetchMock = mockFetchOnceText(`<payload>${"x".repeat(600)}</payload>`);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const cameras = await fetchCamerasMetadata();
+
+    expect(cameras).toEqual([]);
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("schema may have changed"));
+    errorSpy.mockRestore();
+  });
 });

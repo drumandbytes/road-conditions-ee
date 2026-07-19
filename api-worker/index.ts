@@ -6,7 +6,7 @@ import { handleGetEmailPreferences, handleUpdateEmailPreferences } from "./src/r
 import { handleGeocode } from "./src/routes/geocode";
 import { handleHazards } from "./src/routes/hazards";
 import { handleRequestLogin, handleVerifyLogin } from "./src/routes/login";
-import { handlePushSubscription } from "./src/routes/push-subscription";
+import { handleDeletePushSubscription, handlePushSubscription } from "./src/routes/push-subscription";
 import { handleRestrictions } from "./src/routes/restrictions";
 import { handleStripeWebhook } from "./src/routes/stripe-webhook";
 import { handleListSavedPoints, handleSubscribe, handleUnsubscribe } from "./src/routes/subscribe";
@@ -28,7 +28,16 @@ export default {
     const preflight = handlePreflight(request);
     if (preflight) return preflight;
 
-    const response = await route(request, env);
+    let response: Response;
+    try {
+      response = await route(request, env);
+    } catch (err) {
+      // Without this, an uncaught exception anywhere in route() skips the CORS-header logic
+      // below entirely — the browser then reports an opaque CORS failure instead of surfacing
+      // whatever actually went wrong.
+      console.error("[api-worker] unhandled error:", err instanceof Error ? err.stack : err);
+      response = Response.json({ error: "Internal server error" }, { status: 500 });
+    }
     const origin = request.headers.get("Origin");
     if (isAllowedOrigin(origin)) {
       for (const [key, value] of Object.entries(corsHeaders(origin!))) {
@@ -98,6 +107,10 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (method === "POST" && pathname === "/api/push-subscription") {
     const user = await authenticatePaidUser(env.DB, request);
     return handlePushSubscription(request, env.DB, user);
+  }
+  if (method === "DELETE" && pathname === "/api/push-subscription") {
+    const user = await authenticatePaidUser(env.DB, request);
+    return handleDeletePushSubscription(request, env.DB, user);
   }
   if (method === "GET" && pathname === "/api/me") {
     const user = await authenticatePaidUser(env.DB, request);

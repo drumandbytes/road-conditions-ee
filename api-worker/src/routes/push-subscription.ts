@@ -1,5 +1,5 @@
 import type { UserRow } from "../db";
-import { upsertPushSubscription } from "../db";
+import { deletePushSubscription, upsertPushSubscription } from "../db";
 
 interface PushSubscriptionBody {
   endpoint: string;
@@ -45,5 +45,32 @@ export async function handlePushSubscription(
     p256dh: parsed.keys.p256dh,
     auth: parsed.keys.auth,
   });
+  return new Response(null, { status: 204 });
+}
+
+/** Lets a user turn push alerts back off — the frontend calls this right after unsubscribing
+ *  the browser's own PushManager subscription, so both sides (browser + backend) agree it's
+ *  gone rather than leaving an orphaned row an ended subscription can never reach again. */
+export async function handleDeletePushSubscription(
+  request: Request,
+  db: D1Database,
+  user: UserRow | null,
+): Promise<Response> {
+  if (!user) {
+    return Response.json({ error: "Push alerts require an active subscription" }, { status: 402 });
+  }
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return Response.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+  const endpoint = (body as Record<string, unknown> | null)?.endpoint;
+  if (typeof endpoint !== "string" || !endpoint) {
+    return Response.json({ error: "Missing endpoint" }, { status: 400 });
+  }
+
+  await deletePushSubscription(db, user.id, endpoint);
   return new Response(null, { status: 204 });
 }

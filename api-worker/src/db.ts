@@ -232,6 +232,12 @@ export async function upsertPushSubscription(
   return row;
 }
 
+// Scoped to userId + endpoint (not endpoint alone) so one user can't remove another's
+// subscription even if they somehow knew its endpoint URL.
+export async function deletePushSubscription(db: D1Database, userId: string, endpoint: string): Promise<void> {
+  await db.prepare("DELETE FROM push_subscriptions WHERE user_id = ? AND endpoint = ?").bind(userId, endpoint).run();
+}
+
 export async function getUserByBearerToken(db: D1Database, token: string): Promise<UserRow | null> {
   const row = await db
     .prepare("SELECT * FROM users WHERE bearer_token = ?")

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "preact/hooks";
 import { deleteSavedPoint, getSavedPoints } from "../lib/api";
 import type { SavedPoint } from "../lib/api";
-import { enablePushNotifications, hasActivePushSubscription, pushSupported } from "../lib/push";
+import { disablePushNotifications, enablePushNotifications, hasActivePushSubscription, pushSupported } from "../lib/push";
 
 type PushStatus = "checking" | "unsupported" | "off" | "on" | "denied" | "error" | "brave-blocked";
 
@@ -16,6 +16,8 @@ export interface SavedPointsSectionT {
   pushEnableButton: string;
   pushEnabling: string;
   pushEnabled: string;
+  pushDisableButton: string;
+  pushDisabling: string;
   pushDenied: string;
   pushUnsupported: string;
   pushEnableError: string;
@@ -33,6 +35,7 @@ export function SavedPointsSection({ t, refreshKey, onAddSavedPoint }: SavedPoin
   const [loadError, setLoadError] = useState(false);
   const [pushStatus, setPushStatus] = useState<PushStatus>("checking");
   const [enabling, setEnabling] = useState(false);
+  const [disabling, setDisabling] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -85,12 +88,26 @@ export function SavedPointsSection({ t, refreshKey, onAddSavedPoint }: SavedPoin
     setPushStatus(result === "ok" ? "on" : result);
   }
 
+  async function onDisablePush() {
+    setDisabling(true);
+    const ok = await disablePushNotifications();
+    setDisabling(false);
+    setPushStatus(ok ? "off" : "on");
+  }
+
   return (
     <>
       <h2>{t.pushTitle}</h2>
       {pushStatus === "unsupported" && <p class="account-trial-note">{t.pushUnsupported}</p>}
       {pushStatus === "denied" && <p class="account-trial-note">{t.pushDenied}</p>}
-      {pushStatus === "on" && <p class="account-trial-note">{t.pushEnabled}</p>}
+      {pushStatus === "on" && (
+        <>
+          <p class="account-trial-note">{t.pushEnabled}</p>
+          <button type="button" class="account-button account-button-secondary" onClick={onDisablePush} disabled={disabling}>
+            {disabling ? t.pushDisabling : t.pushDisableButton}
+          </button>
+        </>
+      )}
       {pushStatus === "error" && <p class="account-alert account-alert-error">{t.pushEnableError}</p>}
       {pushStatus === "brave-blocked" && (
         <p class="account-alert account-alert-error">{t.pushEnableErrorBrave}</p>

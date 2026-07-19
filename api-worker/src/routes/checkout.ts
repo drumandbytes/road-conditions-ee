@@ -47,29 +47,35 @@ export async function handleCheckout(request: Request, env: { STRIPE_SECRET_KEY?
   const plan = PLANS[body.plan];
   const stripe = stripeClient(env.STRIPE_SECRET_KEY);
 
-  const session = await stripe.checkout.sessions.create({
-    mode: "subscription",
-    line_items: [
-      {
-        price_data: {
-          currency: "eur",
-          product_data: { name: `Teesilm paid tier (${body.plan})` },
-          unit_amount: plan.amountEurCents,
-          recurring: { interval: plan.interval },
+  let session: Stripe.Checkout.Session;
+  try {
+    session = await stripe.checkout.sessions.create({
+      mode: "subscription",
+      line_items: [
+        {
+          price_data: {
+            currency: "eur",
+            product_data: { name: `Teesilm paid tier (${body.plan})` },
+            unit_amount: plan.amountEurCents,
+            recurring: { interval: plan.interval },
+          },
+          quantity: 1,
         },
-        quantity: 1,
-      },
-    ],
-    subscription_data: { trial_period_days: TRIAL_PERIOD_DAYS },
-    allow_promotion_codes: true,
-    // Carries the consent checkbox from our own pre-checkout UI (see SubscribeConsent in the
-    // frontend) through to the webhook/session-completion handlers, which set
-    // email_preferences.product_updates from it — Stripe Checkout has no native checkbox
-    // custom field, and its built-in promotions-consent collection is US-merchant-only.
-    metadata: { productUpdatesOptIn: body.productUpdatesOptIn === true ? "true" : "false" },
-    success_url: `${FRONTEND_URL}/?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${FRONTEND_URL}/?checkout=cancelled`,
-  });
+      ],
+      subscription_data: { trial_period_days: TRIAL_PERIOD_DAYS },
+      allow_promotion_codes: true,
+      // Carries the consent checkbox from our own pre-checkout UI (see SubscribeConsent in the
+      // frontend) through to the webhook/session-completion handlers, which set
+      // email_preferences.product_updates from it — Stripe Checkout has no native checkbox
+      // custom field, and its built-in promotions-consent collection is US-merchant-only.
+      metadata: { productUpdatesOptIn: body.productUpdatesOptIn === true ? "true" : "false" },
+      success_url: `${FRONTEND_URL}/?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${FRONTEND_URL}/?checkout=cancelled`,
+    });
+  } catch (err) {
+    console.error("Stripe checkout session creation failed:", err instanceof Error ? err.message : err);
+    return Response.json({ error: "Failed to create checkout session" }, { status: 502 });
+  }
 
   if (!session.url) {
     return Response.json({ error: "Failed to create checkout session" }, { status: 502 });
@@ -92,7 +98,13 @@ export async function handleCheckoutSession(
   }
   const stripe = stripeClient(env.STRIPE_SECRET_KEY);
 
-  const session = await stripe.checkout.sessions.retrieve(sessionId);
+  let session: Stripe.Checkout.Session;
+  try {
+    session = await stripe.checkout.sessions.retrieve(sessionId);
+  } catch (err) {
+    console.error("Stripe checkout session retrieval failed:", err instanceof Error ? err.message : err);
+    return Response.json({ error: "Checkout session not found" }, { status: 404 });
+  }
   const customerId = typeof session.customer === "string" ? session.customer : session.customer?.id;
   if (!customerId || session.payment_status !== "paid") {
     return Response.json({ error: "Checkout session not completed" }, { status: 402 });
@@ -135,9 +147,15 @@ export async function handlePortal(
   }
   const stripe = stripeClient(env.STRIPE_SECRET_KEY);
 
-  const portalSession = await stripe.billingPortal.sessions.create({
-    customer: user.stripe_customer_id,
-    return_url: FRONTEND_URL,
-  });
+  let portalSession: Stripe.BillingPortal.Session;
+  try {
+    portalSession = await stripe.billingPortal.sessions.create({
+      customer: user.stripe_customer_id,
+      return_url: FRONTEND_URL,
+    });
+  } catch (err) {
+    console.error("Stripe portal session creation failed:", err instanceof Error ? err.message : err);
+    return Response.json({ error: "Failed to open billing portal" }, { status: 502 });
+  }
   return Response.json({ url: portalSession.url });
 }

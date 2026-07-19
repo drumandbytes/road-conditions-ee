@@ -412,13 +412,11 @@ export async function upsertHazardsAndGetChanged(
   db: D1Database,
   hazards: HazardRecord[],
 ): Promise<HazardRecord[]> {
-  if (hazards.length === 0) return [];
-
+  // Same diff-based approach as restrictions/detours/vms_signs above — writing every fetched
+  // hazard on every 3-min poll (rather than only changed ones) was previously the cause of a
+  // ~5.7x D1 write-quota overage on other tables; hazards had been missed when that was fixed.
   const existing = await db
-    .prepare(
-      `SELECT external_id, raw_json FROM hazards WHERE external_id IN (${hazards.map(() => "?").join(",")})`,
-    )
-    .bind(...hazards.map((h) => h.externalId))
+    .prepare("SELECT external_id, raw_json FROM hazards")
     .all<{ external_id: string; raw_json: string }>();
   const existingByExternalId = new Map(existing.results.map((r) => [r.external_id, r.raw_json]));
 
@@ -434,10 +432,20 @@ export async function upsertHazardsAndGetChanged(
   );
   await batchIfNonEmpty(
     db,
-    hazards.map((h) =>
+    changed.map((h) =>
       stmt.bind(h.externalId, h.eventType, h.lat, h.lng, h.description, h.startsAt, h.endsAt, h.rawJson),
     ),
   );
+
+  // Same disappeared-row cleanup as restrictions/detours/vms_signs above — a hazard missing
+  // from this poll (resolved, expired) must stop showing as active rather than staying in the
+  // table forever; this table was previously missing this step entirely.
+  const currentIds = new Set(hazards.map((h) => h.externalId));
+  const disappearedIds = existing.results.map((r) => r.external_id).filter((id) => !currentIds.has(id));
+  if (disappearedIds.length > 0) {
+    const placeholders = disappearedIds.map(() => "?").join(",");
+    await db.prepare(`DELETE FROM hazards WHERE external_id IN (${placeholders})`).bind(...disappearedIds).run();
+  }
 
   return changed;
 }

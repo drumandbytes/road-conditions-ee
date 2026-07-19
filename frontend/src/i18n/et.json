@@ -183,6 +183,8 @@
     "pushEnableButton": "Luba teavitused",
     "pushEnabling": "Lubamine…",
     "pushEnabled": "Teavitused on lubatud.",
+    "pushDisableButton": "Lülita teavitused välja",
+    "pushDisabling": "Väljalülitamine…",
     "pushDenied": "Teavitused on brauseri seadetes blokeeritud.",
     "pushUnsupported": "Push-teavitused pole selles brauseris toetatud.",
     "pushEnableError": "Teavituste lubamine ebaõnnestus. Proovi uuesti.",

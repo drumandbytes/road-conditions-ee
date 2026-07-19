@@ -4,7 +4,7 @@ import { handleWeatherStations } from "../src/routes/weather";
 import { handleCameraImage, handleCameras } from "../src/routes/cameras";
 import { handleGeocode } from "../src/routes/geocode";
 import { handleHazards } from "../src/routes/hazards";
-import { handlePushSubscription } from "../src/routes/push-subscription";
+import { handleDeletePushSubscription, handlePushSubscription } from "../src/routes/push-subscription";
 import { handleRequestLogin, handleVerifyLogin } from "../src/routes/login";
 import { handleRestrictions } from "../src/routes/restrictions";
 import { handleVms } from "../src/routes/vms";
@@ -528,6 +528,10 @@ describe("handlePortal", () => {
 });
 
 describe("handleStripeWebhook", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it("returns 503 when Stripe isn't configured", async () => {
     const req = new Request("https://example.com/api/stripe-webhook", { method: "POST", body: "{}" });
     const res = await handleStripeWebhook(req, { DB: fakeDb([]), EMAIL: fakeEmail() as unknown as SendEmail });
@@ -602,10 +606,11 @@ describe("handleStripeWebhook", () => {
 
   it("sends a subscription-ended email when the billing preference is on", async () => {
     const email = fakeEmail();
+    vi.stubGlobal("fetch", mockFetchJson(200, { id: "sub_1", status: "canceled", customer: "cus_1" }));
     const req = await stripeWebhookRequest({
       id: "evt_2",
       type: "customer.subscription.deleted",
-      data: { object: { customer: "cus_1", status: "canceled" } },
+      data: { object: { id: "sub_1", customer: "cus_1", status: "canceled" } },
     });
     const res = await handleStripeWebhook(req, {
       STRIPE_SECRET_KEY: "sk_test_x",
@@ -625,10 +630,11 @@ describe("handleStripeWebhook", () => {
 
   it("skips the subscription-ended email when billing is opted out", async () => {
     const email = fakeEmail();
+    vi.stubGlobal("fetch", mockFetchJson(200, { id: "sub_1", status: "canceled", customer: "cus_1" }));
     const req = await stripeWebhookRequest({
       id: "evt_3",
       type: "customer.subscription.deleted",
-      data: { object: { customer: "cus_1", status: "canceled" } },
+      data: { object: { id: "sub_1", customer: "cus_1", status: "canceled" } },
     });
     const res = await handleStripeWebhook(req, {
       STRIPE_SECRET_KEY: "sk_test_x",
@@ -643,6 +649,31 @@ describe("handleStripeWebhook", () => {
     });
     expect(res.status).toBe(200);
     expect(email.send).not.toHaveBeenCalled();
+  });
+
+  // Regression test for the webhook-ordering fix: Stripe doesn't guarantee delivery order, so
+  // an older "active" customer.subscription.updated event can arrive after a newer
+  // cancellation. The handler must trust the subscription's freshly re-fetched current state,
+  // not this event's embedded (potentially stale) status.
+  it("writes the freshly-retrieved subscription status, not the (possibly stale) event payload's status", async () => {
+    vi.stubGlobal("fetch", mockFetchJson(200, { id: "sub_1", status: "canceled", customer: "cus_1" }));
+    const req = await stripeWebhookRequest({
+      id: "evt_stale",
+      type: "customer.subscription.updated",
+      // Event payload claims "active" — but retrieve() below returns the true current state,
+      // "canceled", simulating this event having been delivered late/out of order.
+      data: { object: { id: "sub_1", customer: "cus_1", status: "active" } },
+    });
+    const { db, calls } = fakeDbCapturing(null);
+    const res = await handleStripeWebhook(req, {
+      STRIPE_SECRET_KEY: "sk_test_x",
+      STRIPE_WEBHOOK_SECRET: WEBHOOK_SECRET,
+      DB: db,
+      EMAIL: fakeEmail() as unknown as SendEmail,
+      UNSUBSCRIBE_SECRET: "secret",
+    });
+    expect(res.status).toBe(200);
+    expect(calls[0]).toEqual(["canceled", "cus_1"]);
   });
 
   it("sends a renewal reminder on invoice.upcoming with the amount and date from the invoice", async () => {
@@ -898,6 +929,33 @@ describe("handlePushSubscription", () => {
     expect(res.status).toBe(204);
     expect(calls[0][0]).toBe("u1");
     expect(calls[0][1]).toBe("https://push.example.com/abc");
+  });
+});
+
+describe("handleDeletePushSubscription", () => {
+  function deletePushSubRequest(body: unknown): Request {
+    return new Request("https://example.com/api/push-subscription", { method: "DELETE", body: JSON.stringify(body) });
+  }
+
+  it("requires a paid user", async () => {
+    const res = await handleDeletePushSubscription(deletePushSubRequest({}), fakeDb([]), null);
+    expect(res.status).toBe(402);
+  });
+
+  it("rejects a missing endpoint", async () => {
+    const res = await handleDeletePushSubscription(deletePushSubRequest({}), fakeDb([]), PAID_USER);
+    expect(res.status).toBe(400);
+  });
+
+  it("deletes by user id + endpoint", async () => {
+    const { db, calls } = fakeDbCapturing(null);
+    const res = await handleDeletePushSubscription(
+      deletePushSubRequest({ endpoint: "https://push.example.com/abc" }),
+      db,
+      PAID_USER,
+    );
+    expect(res.status).toBe(204);
+    expect(calls[0]).toEqual(["u1", "https://push.example.com/abc"]);
   });
 });
 

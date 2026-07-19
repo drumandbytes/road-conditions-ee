@@ -69,6 +69,14 @@ export async function fetchCamerasMetadata(): Promise<CameraMeta[]> {
       imageUrl: imageUrlMatch[1],
     });
   }
+  // A genuinely empty result is very unlikely (178 cameras, confirmed working) — a non-trivial
+  // response producing zero parsed entries means Tark Tee changed its XML schema (namespace
+  // prefix, element structure) and this regex parser silently broke, not "no cameras today."
+  if (cameras.length === 0 && xml.length > 500) {
+    console.error(
+      `[ingest-worker] fetchCamerasMetadata: parsed 0 cameras from a ${xml.length}-byte response — the upstream XML schema may have changed`,
+    );
+  }
   return cameras;
 }
 
@@ -153,10 +161,17 @@ export async function fetchHazards(
     for (const record of situation.situationRecord ?? []) {
       const loc = record.groupOfLocations?.locationForDisplay;
       if (!loc || loc.latitude === undefined || loc.longitude === undefined) continue;
+      // externalId is a NOT NULL primary key in D1 — record.id/situation.id are typed as
+      // required strings, but that's unverified against a real payload (see this interface's
+      // own comment above), so a runtime-missing id must be skipped here rather than reaching
+      // db.ts as `undefined` and failing the entire batch write for every hazard type fetched
+      // this cycle, not just this one record.
+      const externalId = record.id ?? situation.id;
+      if (!externalId) continue;
       const commentValues = record.generalPublicComment?.[0]?.comment?.values ?? [];
       const description = commentValues.find((v) => v.lang === "et")?.value ?? commentValues[0]?.value ?? null;
       records.push({
-        externalId: record.id ?? situation.id,
+        externalId,
         eventType,
         lat: loc.latitude,
         lng: loc.longitude,

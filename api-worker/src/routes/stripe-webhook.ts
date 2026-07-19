@@ -66,7 +66,12 @@ export async function handleStripeWebhook(request: Request, env: StripeWebhookEn
     case "customer.subscription.deleted": {
       const subscription = event.data.object as Stripe.Subscription;
       const customerId = typeof subscription.customer === "string" ? subscription.customer : subscription.customer.id;
-      const status = event.type === "customer.subscription.deleted" ? "canceled" : mapStripeStatus(subscription.status);
+      // Stripe doesn't guarantee webhook delivery order — an older "active" event can arrive
+      // after a newer cancellation. Re-fetching the subscription's current state (rather than
+      // trusting this event's embedded snapshot) means a late, stale event can't revert a
+      // more recent cancellation back to active.
+      const current = await stripe.subscriptions.retrieve(subscription.id);
+      const status = mapStripeStatus(current.status);
       await updateSubscriptionStatusByStripeCustomerId(env.DB, customerId, status);
 
       if (event.type === "customer.subscription.deleted") {

@@ -1,4 +1,4 @@
-import { registerPushSubscription } from "./api";
+import { registerPushSubscription, unregisterPushSubscription } from "./api";
 
 // Baked in at build time (a GitHub Actions repo variable, same mechanism as
 // VITE_API_BASE_URL) — the public key is meant to be public, unlike VAPID_PRIVATE_KEY which
@@ -78,5 +78,30 @@ export async function enablePushNotifications(): Promise<EnablePushResult> {
   } catch (err) {
     console.error("Failed to enable push notifications", err);
     return (await isBraveBrowser()) ? "brave-blocked" : "error";
+  }
+}
+
+/** Reverses enablePushNotifications — unsubscribes the browser's own PushManager subscription
+ *  first (the user-facing effect: no more push permission/receipt), then best-effort tells the
+ *  backend to remove its copy. A backend-delete failure isn't fatal here — the row is already
+ *  harmless once the browser side is gone, and ingest-worker's failure_count-based pruning
+ *  cleans up a stale row the next time a send to it fails anyway. */
+export async function disablePushNotifications(): Promise<boolean> {
+  if (!pushSupported()) return false;
+  try {
+    const registration = await navigator.serviceWorker.ready;
+    const subscription = await registration.pushManager.getSubscription();
+    if (!subscription) return true;
+    const endpoint = subscription.endpoint;
+    await subscription.unsubscribe();
+    try {
+      await unregisterPushSubscription(endpoint);
+    } catch (err) {
+      console.error("Failed to remove push subscription from backend", err);
+    }
+    return true;
+  } catch (err) {
+    console.error("Failed to disable push notifications", err);
+    return false;
   }
 }
