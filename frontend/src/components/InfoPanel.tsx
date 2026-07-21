@@ -30,6 +30,8 @@ interface InfoPanelProps {
     info: {
       openButton: string;
       close: string;
+      expandButton: string;
+      collapseButton: string;
       tabInfo: string;
       tabAccount: string;
       aboutLink: string;
@@ -120,6 +122,7 @@ export function InfoPanel({
 }: InfoPanelProps) {
   const [tab, setTab] = useState<Tab>("info");
   const [subview, setSubview] = useState<"none" | "about" | "guide">("none");
+  const [expanded, setExpanded] = useState(false);
 
   return (
     <>
@@ -128,7 +131,15 @@ export function InfoPanel({
       </button>
       {open && (
         <div class="info-overlay" onClick={() => onOpenChange(false)}>
-          <div class="info-panel" onClick={(e) => e.stopPropagation()}>
+          <div class={expanded ? "info-panel info-panel-expanded" : "info-panel"} onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              class="info-panel-handle"
+              onClick={() => setExpanded((v) => !v)}
+              aria-label={expanded ? t.info.collapseButton : t.info.expandButton}
+            >
+              <span class="info-panel-handle-bar" />
+            </button>
             <div class="info-panel-header">
               <div class="locale-toggle" role="group">
                 {(["et", "en"] as const).map((l) => (

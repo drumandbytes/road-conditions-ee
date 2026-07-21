@@ -86,7 +86,12 @@ async function pollFast(env: Env): Promise<void> {
   });
 
   await runStep("hazards", async () => {
-    // Returns [] per feed type until TARKTEE_API_KEY is active (registration pending).
+    // Skip entirely rather than fetch (which returns [] per feed type until TARKTEE_API_KEY
+    // is active — registration pending) — upsertHazardsAndGetChanged treats an empty input as
+    // "confirmed zero hazards" and deletes every existing row accordingly. Without this guard,
+    // any hazard row that ever existed would get wiped on the very next poll while the key is
+    // unset, since there'd be nothing to distinguish "genuinely zero" from "didn't really fetch".
+    if (!env.TARKTEE_API_KEY) return;
     const hazards = await fetchAllHazards(env.TARKTEE_API_KEY);
     changedHazards = await upsertHazardsAndGetChanged(env.DB, hazards);
   });

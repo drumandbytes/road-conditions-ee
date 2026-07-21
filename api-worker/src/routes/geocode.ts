@@ -62,7 +62,19 @@ async function queryNominatim(q: string): Promise<NominatimResult[] | null> {
   return res.json();
 }
 
-export async function handleGeocode(request: Request): Promise<Response> {
+export async function handleGeocode(
+  request: Request,
+  env: { GEOCODE_RATE_LIMITER?: RateLimit },
+): Promise<Response> {
+  // Keyed by IP, not per-user — this route is free/unauthenticated by design (see comment
+  // above), so there's no account to key by, and the thing actually being protected is
+  // Nominatim's shared ~1 req/sec policy for the Worker's whole egress IP, not any one caller.
+  if (env.GEOCODE_RATE_LIMITER) {
+    const clientIp = request.headers.get("CF-Connecting-IP") ?? "unknown";
+    const { success } = await env.GEOCODE_RATE_LIMITER.limit({ key: clientIp });
+    if (!success) return Response.json({ error: "Too many requests — try again shortly" }, { status: 429 });
+  }
+
   const url = new URL(request.url);
   const q = url.searchParams.get("q")?.trim() ?? "";
   if (q.length < MIN_QUERY_LENGTH || q.length > MAX_QUERY_LENGTH) {

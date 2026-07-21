@@ -37,9 +37,11 @@ export async function sendWebPush(
   vapidPublicKey: string,
   vapidPrivateKey: string,
 ): Promise<PushResult> {
-  webpush.setVapidDetails(VAPID_SUBJECT, vapidPublicKey, vapidPrivateKey);
-
   try {
+    // Inside the try, not before it — a malformed VAPID key (e.g. pasted wrong via `wrangler
+    // secret put`) throws synchronously here, and this function's contract (see doc comment
+    // above) is that it never throws.
+    webpush.setVapidDetails(VAPID_SUBJECT, vapidPublicKey, vapidPrivateKey);
     await webpush.sendNotification(
       { endpoint: subscription.endpoint, keys: { p256dh: subscription.p256dh, auth: subscription.auth } },
       JSON.stringify(payload),

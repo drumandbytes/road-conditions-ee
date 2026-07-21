@@ -69,6 +69,8 @@
   "info": {
     "openButton": "Menüü",
     "close": "Sulge",
+    "expandButton": "Laienda menüü",
+    "collapseButton": "Ahenda menüü",
     "tabInfo": "Info",
     "tabAccount": "Konto",
     "aboutLink": "Teave projekti kohta",

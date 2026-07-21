@@ -36,9 +36,20 @@ function isPlan(value: unknown): value is Plan {
 /** Starts a new checkout for the chosen plan. No auth required — this is how a first-time
  *  subscriber begins; Stripe collects email and payment details on its own hosted page, we
  *  never see card data (per the plan's security principle). */
-export async function handleCheckout(request: Request, env: { STRIPE_SECRET_KEY?: string }): Promise<Response> {
+export async function handleCheckout(
+  request: Request,
+  env: { STRIPE_SECRET_KEY?: string; CHECKOUT_RATE_LIMITER?: RateLimit },
+): Promise<Response> {
   if (!env.STRIPE_SECRET_KEY) {
     return Response.json({ error: "Payments are not configured yet" }, { status: 503 });
+  }
+  // Keyed by IP — this route is unauthenticated by design (first-time subscribers have no
+  // token yet), so an IP is the only thing available to key by. Protects against a script
+  // creating an unbounded number of live Stripe Checkout Sessions at no cost to the caller.
+  if (env.CHECKOUT_RATE_LIMITER) {
+    const clientIp = request.headers.get("CF-Connecting-IP") ?? "unknown";
+    const { success } = await env.CHECKOUT_RATE_LIMITER.limit({ key: clientIp });
+    if (!success) return Response.json({ error: "Too many requests — try again shortly" }, { status: 429 });
   }
   const body = (await request.json().catch(() => ({}))) as { plan?: unknown; productUpdatesOptIn?: unknown };
   if (!isPlan(body.plan)) {

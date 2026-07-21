@@ -449,6 +449,20 @@ describe("handleCheckout", () => {
     const res = await handleCheckout(checkoutRequest({ plan: "lifetime" }), { STRIPE_SECRET_KEY: "sk_test_x" });
     expect(res.status).toBe(400);
   });
+
+  it("returns 429 without calling Stripe when the rate limiter denies the request", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const limiter = { limit: vi.fn().mockResolvedValue({ success: false }) };
+
+    const res = await handleCheckout(checkoutRequest({ plan: "monthly" }), {
+      STRIPE_SECRET_KEY: "sk_test_x",
+      CHECKOUT_RATE_LIMITER: limiter as unknown as RateLimit,
+    });
+
+    expect(res.status).toBe(429);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 });
 
 describe("handleCheckoutSession", () => {
@@ -730,7 +744,7 @@ describe("handleGeocode", () => {
   it("rejects a too-short query without calling Nominatim", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
-    const res = await handleGeocode(new Request("https://example.com/api/geocode?q=ab"));
+    const res = await handleGeocode(new Request("https://example.com/api/geocode?q=ab"), {});
     expect(res.status).toBe(400);
     expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -744,7 +758,7 @@ describe("handleGeocode", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    const res = await handleGeocode(new Request("https://example.com/api/geocode?q=Narva+mnt+5"));
+    const res = await handleGeocode(new Request("https://example.com/api/geocode?q=Narva+mnt+5"), {});
     const body = await res.json();
 
     expect(body).toEqual([{ label: "Narva mnt 5, Tallinn, Eesti", lat: 59.437, lng: 24.758 }]);
@@ -754,7 +768,7 @@ describe("handleGeocode", () => {
 
   it("returns 502 when Nominatim itself fails", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("", { status: 500 })));
-    const res = await handleGeocode(new Request("https://example.com/api/geocode?q=Narva+mnt"));
+    const res = await handleGeocode(new Request("https://example.com/api/geocode?q=Narva+mnt"), {});
     expect(res.status).toBe(502);
   });
 
@@ -770,7 +784,7 @@ describe("handleGeocode", () => {
       );
     vi.stubGlobal("fetch", fetchMock);
 
-    const res = await handleGeocode(new Request("https://example.com/api/geocode?q=J.+Vilmsi+45a"));
+    const res = await handleGeocode(new Request("https://example.com/api/geocode?q=J.+Vilmsi+45a"), {});
     const body = await res.json();
 
     expect(body).toEqual([{ label: "45a, Jüri Vilmsi, Tallinn, Eesti", lat: 59.44, lng: 24.77 }]);
@@ -787,8 +801,40 @@ describe("handleGeocode", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    await handleGeocode(new Request("https://example.com/api/geocode?q=Narva+mnt+5"));
+    await handleGeocode(new Request("https://example.com/api/geocode?q=Narva+mnt+5"), {});
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns 429 without calling Nominatim when the rate limiter denies the request", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const limiter = { limit: vi.fn().mockResolvedValue({ success: false }) };
+
+    const res = await handleGeocode(new Request("https://example.com/api/geocode?q=Narva+mnt+5"), {
+      GEOCODE_RATE_LIMITER: limiter as unknown as RateLimit,
+    });
+
+    expect(res.status).toBe(429);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("proceeds normally when the rate limiter allows the request", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify([{ display_name: "Narva mnt 5, Tallinn, Eesti", lat: "59.4", lon: "24.7" }]), {
+          status: 200,
+        }),
+      ),
+    );
+    const limiter = { limit: vi.fn().mockResolvedValue({ success: true }) };
+
+    const res = await handleGeocode(new Request("https://example.com/api/geocode?q=Narva+mnt+5"), {
+      GEOCODE_RATE_LIMITER: limiter as unknown as RateLimit,
+    });
+
+    expect(res.status).toBe(200);
+    expect(limiter.limit).toHaveBeenCalledTimes(1);
   });
 });
 

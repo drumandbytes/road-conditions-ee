@@ -39,6 +39,7 @@ export function SavedPointsSection({ t, refreshKey, onAddSavedPoint }: SavedPoin
 
   useEffect(() => {
     let cancelled = false;
+    setLoadError(false);
     getSavedPoints()
       .then((result) => {
         if (!cancelled) setPoints(result);

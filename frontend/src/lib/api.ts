@@ -35,20 +35,33 @@ async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
   }
 }
 
-export async function getWeatherStations(): Promise<GeoJSON.FeatureCollection> {
-  return (await apiFetch("/api/weather-stations")).json();
+// Each returns null on a genuine failure (network error, 4xx/5xx) rather than parsing whatever
+// body came back as a FeatureCollection — Map.tsx relies on that to tell "this layer failed"
+// from "this layer has real data" and skip only the failed one, not blow up trying to render
+// an error body's shape as GeoJSON (which previously could throw partway through adding the
+// four layers and silently skip whichever ones hadn't been added yet).
+export async function getWeatherStations(): Promise<GeoJSON.FeatureCollection | null> {
+  const res = await apiFetch("/api/weather-stations");
+  if (!res.ok) return null;
+  return res.json();
 }
 
-export async function getCameras(): Promise<GeoJSON.FeatureCollection> {
-  return (await apiFetch("/api/cameras")).json();
+export async function getCameras(): Promise<GeoJSON.FeatureCollection | null> {
+  const res = await apiFetch("/api/cameras");
+  if (!res.ok) return null;
+  return res.json();
 }
 
-export async function getHazards(): Promise<GeoJSON.FeatureCollection> {
-  return (await apiFetch("/api/hazards")).json();
+export async function getHazards(): Promise<GeoJSON.FeatureCollection | null> {
+  const res = await apiFetch("/api/hazards");
+  if (!res.ok) return null;
+  return res.json();
 }
 
-export async function getRestrictions(): Promise<GeoJSON.FeatureCollection> {
-  return (await apiFetch("/api/restrictions")).json();
+export async function getRestrictions(): Promise<GeoJSON.FeatureCollection | null> {
+  const res = await apiFetch("/api/restrictions");
+  if (!res.ok) return null;
+  return res.json();
 }
 
 // Free/unauthenticated callers still get 200s here — see api-worker's handleVms — just with

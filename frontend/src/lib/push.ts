@@ -5,6 +5,12 @@ import { registerPushSubscription, unregisterPushSubscription } from "./api";
 // stays a Worker secret in ingest-worker. Undefined until that variable is actually set.
 const VAPID_PUBLIC_KEY: string | undefined = import.meta.env.VITE_VAPID_PUBLIC_KEY;
 
+// Mirrors the backend's copy so disablePushNotifications can still remove it even once
+// pushManager.getSubscription() itself returns null (permission revoked, site data cleared) —
+// at that point the browser has no memory of its own former endpoint, so this is the only
+// place left to find it.
+const PUSH_ENDPOINT_KEY = "road-conditions-push-endpoint";
+
 // pushManager.subscribe wants applicationServerKey as a raw Uint8Array, not the base64url
 // string VAPID keys are normally shared as — standard conversion, no library needed for it.
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
@@ -74,6 +80,7 @@ export async function enablePushNotifications(): Promise<EnablePushResult> {
       endpoint: json.endpoint,
       keys: { p256dh: json.keys.p256dh, auth: json.keys.auth },
     });
+    localStorage.setItem(PUSH_ENDPOINT_KEY, json.endpoint);
     return "ok";
   } catch (err) {
     console.error("Failed to enable push notifications", err);
@@ -91,14 +98,19 @@ export async function disablePushNotifications(): Promise<boolean> {
   try {
     const registration = await navigator.serviceWorker.ready;
     const subscription = await registration.pushManager.getSubscription();
-    if (!subscription) return true;
-    const endpoint = subscription.endpoint;
-    await subscription.unsubscribe();
-    try {
-      await unregisterPushSubscription(endpoint);
-    } catch (err) {
-      console.error("Failed to remove push subscription from backend", err);
+    // Falls back to the locally-remembered endpoint when the browser's own subscription is
+    // already gone (permission revoked, site data cleared) — getSubscription() returning null
+    // means the browser itself no longer knows which endpoint it used to have.
+    const endpoint = subscription?.endpoint ?? localStorage.getItem(PUSH_ENDPOINT_KEY);
+    if (subscription) await subscription.unsubscribe();
+    if (endpoint) {
+      try {
+        await unregisterPushSubscription(endpoint);
+      } catch (err) {
+        console.error("Failed to remove push subscription from backend", err);
+      }
     }
+    localStorage.removeItem(PUSH_ENDPOINT_KEY);
     return true;
   } catch (err) {
     console.error("Failed to disable push notifications", err);

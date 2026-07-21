@@ -15,6 +15,26 @@ binding = "DB"
 database_name = "road-conditions"
 database_id = "b4a456a7-c3f3-4a1e-95e5-4a8b7af4deb1"
 
+# Both free/unauthenticated routes with an external cost if abused: geocode proxies to
+# Nominatim, whose usage policy caps at ~1 req/sec for the Worker's whole shared egress IP
+# (see geocode.ts); checkout creates a real, live Stripe Checkout Session per call, with no
+# cost to the caller otherwise. Keyed by client IP in both handlers.
+[[ratelimits]]
+name = "GEOCODE_RATE_LIMITER"
+namespace_id = "1001"
+
+  [ratelimits.simple]
+  limit = 10
+  period = 10
+
+[[ratelimits]]
+name = "CHECKOUT_RATE_LIMITER"
+namespace_id = "1002"
+
+  [ratelimits.simple]
+  limit = 5
+  period = 60
+
 # Magic-link sign-in emails (src/routes/login.ts) — requires drumandbytes.ee to be onboarded
 # onto Cloudflare Email Sending first (`wrangler email sending enable drumandbytes.ee`), or
 # every send just fails at Cloudflare's end with the binding still working fine locally/in CI.

@@ -69,6 +69,8 @@
   "info": {
     "openButton": "Menu",
     "close": "Close",
+    "expandButton": "Expand menu",
+    "collapseButton": "Collapse menu",
     "tabInfo": "Info",
     "tabAccount": "Account",
     "aboutLink": "About this project",

@@ -2,6 +2,12 @@ import Stripe from "stripe";
 import { sendPaymentFailedEmail, sendRenewalReminderEmail, sendSubscriptionEndedEmail } from "../billingEmails";
 import { getUserByStripeCustomerId, updateEmailPreferences, updateSubscriptionStatusByStripeCustomerId, upsertUserFromStripe } from "../db";
 
+// NOTE: this maps `past_due` (a card that failed once but is still in Stripe's automatic
+// dunning/retry window, not yet actually canceled) straight to "canceled" — access is revoked
+// on the very first failed payment, before Stripe's own retries get a chance to succeed. This
+// is a deliberate fail-closed choice, not an oversight, but flagging it here since it's in
+// tension with `invoice.payment_failed` sending a "your payment failed" email that implies a
+// grace period exists. Revisit if that mismatch turns out to matter in practice.
 function mapStripeStatus(stripeStatus: Stripe.Subscription.Status): string {
   return stripeStatus === "active" || stripeStatus === "trialing" ? "active" : "canceled";
 }
@@ -70,7 +76,19 @@ export async function handleStripeWebhook(request: Request, env: StripeWebhookEn
       // after a newer cancellation. Re-fetching the subscription's current state (rather than
       // trusting this event's embedded snapshot) means a late, stale event can't revert a
       // more recent cancellation back to active.
-      const current = await stripe.subscriptions.retrieve(subscription.id);
+      let current: Stripe.Subscription;
+      try {
+        current = await stripe.subscriptions.retrieve(subscription.id);
+      } catch (err) {
+        // A 5xx here makes Stripe retry this same event later (its own webhook retry policy)
+        // instead of the status update being silently skipped — logging event.id/customerId
+        // gives it something diagnosable if every retry keeps failing too.
+        console.error(
+          `Failed to re-fetch subscription ${subscription.id} for event ${event.id} (customer ${customerId}):`,
+          err instanceof Error ? err.message : err,
+        );
+        return Response.json({ error: "Failed to verify subscription state" }, { status: 500 });
+      }
       const status = mapStripeStatus(current.status);
       await updateSubscriptionStatusByStripeCustomerId(env.DB, customerId, status);
 

@@ -21,6 +21,8 @@ interface Env {
   STRIPE_SECRET_KEY?: string;
   STRIPE_WEBHOOK_SECRET?: string;
   UNSUBSCRIBE_SECRET?: string;
+  GEOCODE_RATE_LIMITER?: RateLimit;
+  CHECKOUT_RATE_LIMITER?: RateLimit;
 }
 
 export default {
@@ -67,7 +69,7 @@ async function route(request: Request, env: Env): Promise<Response> {
     return handleRestrictions(env.DB);
   }
   if (method === "GET" && pathname === "/api/geocode") {
-    return handleGeocode(request);
+    return handleGeocode(request, env);
   }
   if (method === "POST" && pathname === "/api/login") {
     return handleRequestLogin(request, env);

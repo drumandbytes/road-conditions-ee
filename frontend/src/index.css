@@ -59,6 +59,11 @@ html,
 body,
 #app {
   height: 100%;
+  /* This app has no top-level scrolling content — the map fills the viewport and every
+     scrollable region (panels, modals) is its own contained element with overflow-y: auto.
+     Without this, a touch-scroll that hits the end of one of those inner scroll areas chains
+     onto the document, rubber-banding/shifting the whole page behind whatever's open. */
+  overflow: hidden;
 }
 
 .app {
@@ -278,14 +283,32 @@ body,
   color: var(--color-text);
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   box-shadow: var(--shadow-panel);
+  transition: max-height 0.2s ease;
 }
 
-.info-panel::before {
-  content: "";
-  position: absolute;
-  top: 0.6rem;
-  left: 50%;
-  transform: translateX(-50%);
+.info-panel-expanded {
+  max-height: 92vh;
+}
+
+/* Used to just be a decorative ::before pseudo-element with the same look — it read as a
+   draggable bottom-sheet handle (standard iOS/Android affordance) but did nothing at all when
+   tapped or dragged. Now a real button that toggles between the default and expanded height;
+   the visible bar is a separate inner span so the tap target (this button) can stay
+   comfortably sized without the bar itself looking oversized. */
+.info-panel-handle {
+  flex-shrink: 0;
+  width: 100%;
+  min-height: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: none;
+  cursor: pointer;
+  padding: 0.5rem 0 0.35rem;
+}
+
+.info-panel-handle-bar {
   width: 2.5rem;
   height: 0.25rem;
   border-radius: 999px;
@@ -314,11 +337,18 @@ body,
   gap: 0.5rem;
   flex-shrink: 0;
   background: var(--color-bg);
-  padding: 1.75rem 1.5rem 0.75rem;
+  /* Top space is now owned by .info-panel-handle, a real element above this in the flex
+     column, not reserved here for an absolutely-positioned pseudo-element. */
+  padding: 0.25rem 1.5rem 0.75rem;
 }
 
 .info-panel-body {
   overflow-y: auto;
+  /* Stops a touch-scroll that reaches the top/bottom of this panel from chaining onto the
+     document (which would otherwise rubber-band the page, or with a scroll gesture that
+     started mid-drag, briefly reach the map underneath) — the classic "menu scroll leaks into
+     the page behind it" mobile bug. */
+  overscroll-behavior: contain;
   flex: 1 1 auto;
   min-height: 0;
   padding: 0 1.5rem 1.5rem;
@@ -642,6 +672,9 @@ body,
   max-width: 90vw;
   max-height: 90vh;
   overflow: auto;
+  /* Same fix as .info-panel-body — also shared by WeatherHistoryModal, which composes this
+     class and can genuinely overflow (many history rows). */
+  overscroll-behavior: contain;
 }
 
 .camera-modal h2 {
