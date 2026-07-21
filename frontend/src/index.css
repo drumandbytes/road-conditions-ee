@@ -283,10 +283,20 @@ body,
   color: var(--color-text);
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   box-shadow: var(--shadow-panel);
-  transition: max-height 0.2s ease;
+  transition: height 0.2s ease, max-height 0.2s ease;
 }
 
+/* Explicit height, not max-height — max-height only clips when content actually exceeds it,
+   so on a tall/desktop viewport where a given tab's content already fits well under 85vh,
+   raising the ceiling to 92vh had nothing to clip and produced no visible change at all. An
+   explicit height always visibly grows the panel by a fixed amount regardless of content
+   length or viewport size (short content just leaves more breathing room at the bottom, via
+   .info-panel-body's flex:1 already filling remaining space). max-height must be raised here
+   too — .info-panel's own max-height: 85vh still applies otherwise and, per the CSS spec,
+   max-height always wins over height when they conflict, silently clamping the explicit
+   height right back down to 85vh. */
 .info-panel-expanded {
+  height: 92vh;
   max-height: 92vh;
 }
 
