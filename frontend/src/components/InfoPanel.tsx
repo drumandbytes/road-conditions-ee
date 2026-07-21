@@ -1,4 +1,4 @@
-import { useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import { AccountPanel } from "./AccountPanel";
 import type { EmailPreferencesT } from "./EmailPreferencesSection";
 import type { FeatureComparisonT } from "./FeatureComparisonTable";
@@ -8,6 +8,23 @@ import type { SignInFormT } from "./SignInForm";
 
 const COFFEE_LINK = "https://buymeacoffee.com/justmaris";
 const ISSUE_LINK = "https://github.com/drumandbytes/road-conditions-ee/issues/new";
+
+// Drag-resize bounds for the panel handle — a fraction of viewport height with a pixel floor
+// (so the header/tabs always stay comfortably visible even on a very short viewport), up to
+// nearly the full screen (a small margin keeps the sheet's rounded top corners visible; flush
+// to 100% would clip them against the viewport edge).
+const MIN_PANEL_HEIGHT_FRACTION = 0.3;
+const MIN_PANEL_HEIGHT_FLOOR_PX = 240;
+const MAX_PANEL_HEIGHT_MARGIN_PX = 16;
+const KEYBOARD_RESIZE_STEP_PX = 40;
+
+function panelHeightBounds(): { min: number; max: number } {
+  const viewportHeight = window.innerHeight;
+  return {
+    min: Math.max(MIN_PANEL_HEIGHT_FLOOR_PX, viewportHeight * MIN_PANEL_HEIGHT_FRACTION),
+    max: viewportHeight - MAX_PANEL_HEIGHT_MARGIN_PX,
+  };
+}
 
 export type Locale = "et" | "en";
 type Tab = "info" | "account";
@@ -30,8 +47,7 @@ interface InfoPanelProps {
     info: {
       openButton: string;
       close: string;
-      expandButton: string;
-      collapseButton: string;
+      resizeHandle: string;
       tabInfo: string;
       tabAccount: string;
       aboutLink: string;
@@ -122,7 +138,56 @@ export function InfoPanel({
 }: InfoPanelProps) {
   const [tab, setTab] = useState<Tab>("info");
   const [subview, setSubview] = useState<"none" | "about" | "guide">("none");
-  const [expanded, setExpanded] = useState(false);
+  // null = no drag/keyboard resize has happened yet — panel uses its normal CSS (content-hugging
+  // up to 85vh). Once set, this pixel value drives the panel's height directly, overriding that
+  // default entirely (see the inline style below for why max-height needs overriding too).
+  const [panelHeight, setPanelHeight] = useState<number | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const dragStartRef = useRef<{ pointerY: number; height: number } | null>(null);
+
+  useEffect(() => {
+    if (!dragging) return;
+
+    function onPointerMove(e: PointerEvent) {
+      if (!dragStartRef.current) return;
+      const { min, max } = panelHeightBounds();
+      // Panel is bottom-anchored — dragging up (pointer Y decreases) must grow it, hence the
+      // subtraction rather than addition.
+      const delta = e.clientY - dragStartRef.current.pointerY;
+      const next = Math.min(max, Math.max(min, dragStartRef.current.height - delta));
+      setPanelHeight(next);
+    }
+    function onPointerUp() {
+      setDragging(false);
+      dragStartRef.current = null;
+    }
+
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+    return () => {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+    };
+  }, [dragging]);
+
+  function onHandlePointerDown(e: PointerEvent) {
+    e.preventDefault();
+    const currentHeight = panelRef.current?.getBoundingClientRect().height ?? panelHeightBounds().min;
+    dragStartRef.current = { pointerY: e.clientY, height: currentHeight };
+    setDragging(true);
+  }
+
+  // Keyboard equivalent of the drag — a pointer-only control would otherwise be entirely
+  // unusable without a mouse/touch input.
+  function onHandleKeyDown(e: KeyboardEvent) {
+    if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+    e.preventDefault();
+    const { min, max } = panelHeightBounds();
+    const current = panelHeight ?? panelRef.current?.getBoundingClientRect().height ?? min;
+    const step = e.key === "ArrowUp" ? KEYBOARD_RESIZE_STEP_PX : -KEYBOARD_RESIZE_STEP_PX;
+    setPanelHeight(Math.min(max, Math.max(min, current + step)));
+  }
 
   return (
     <>
@@ -131,12 +196,22 @@ export function InfoPanel({
       </button>
       {open && (
         <div class="info-overlay" onClick={() => onOpenChange(false)}>
-          <div class={expanded ? "info-panel info-panel-expanded" : "info-panel"} onClick={(e) => e.stopPropagation()}>
+          <div
+            ref={panelRef}
+            class="info-panel"
+            style={
+              panelHeight !== null
+                ? { height: `${panelHeight}px`, maxHeight: `${panelHeight}px`, transition: dragging ? "none" : undefined }
+                : undefined
+            }
+            onClick={(e) => e.stopPropagation()}
+          >
             <button
               type="button"
               class="info-panel-handle"
-              onClick={() => setExpanded((v) => !v)}
-              aria-label={expanded ? t.info.collapseButton : t.info.expandButton}
+              onPointerDown={onHandlePointerDown}
+              onKeyDown={onHandleKeyDown}
+              aria-label={t.info.resizeHandle}
             >
               <span class="info-panel-handle-bar" />
             </button>

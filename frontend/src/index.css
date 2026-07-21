@@ -286,25 +286,16 @@ body,
   transition: height 0.2s ease, max-height 0.2s ease;
 }
 
-/* Explicit height, not max-height — max-height only clips when content actually exceeds it,
-   so on a tall/desktop viewport where a given tab's content already fits well under 85vh,
-   raising the ceiling to 92vh had nothing to clip and produced no visible change at all. An
-   explicit height always visibly grows the panel by a fixed amount regardless of content
-   length or viewport size (short content just leaves more breathing room at the bottom, via
-   .info-panel-body's flex:1 already filling remaining space). max-height must be raised here
-   too — .info-panel's own max-height: 85vh still applies otherwise and, per the CSS spec,
-   max-height always wins over height when they conflict, silently clamping the explicit
-   height right back down to 85vh. */
-.info-panel-expanded {
-  height: 92vh;
-  max-height: 92vh;
-}
-
 /* Used to just be a decorative ::before pseudo-element with the same look — it read as a
    draggable bottom-sheet handle (standard iOS/Android affordance) but did nothing at all when
-   tapped or dragged. Now a real button that toggles between the default and expanded height;
-   the visible bar is a separate inner span so the tap target (this button) can stay
-   comfortably sized without the bar itself looking oversized. */
+   tapped or dragged. Now a real button that's actually draggable (see InfoPanel.tsx's pointer
+   handlers — height is then set inline, overriding max-height too, since max-height always
+   wins over height in a conflict and would otherwise silently cap the drag at 85vh) between a
+   minimum and nearly-full-screen height, with ArrowUp/ArrowDown as the keyboard equivalent for
+   anyone who can't drag. touch-action: none stops the browser's own scroll/pull-to-refresh
+   gesture from hijacking a touch-drag; user-select: none stops the drag from also selecting
+   surrounding text. The visible bar is a separate inner span so the tap/drag target (this
+   button) can stay comfortably sized without the bar itself looking oversized. */
 .info-panel-handle {
   flex-shrink: 0;
   width: 100%;
@@ -314,7 +305,9 @@ body,
   justify-content: center;
   border: none;
   background: none;
-  cursor: pointer;
+  cursor: ns-resize;
+  touch-action: none;
+  user-select: none;
   padding: 0.5rem 0 0.35rem;
 }
 
