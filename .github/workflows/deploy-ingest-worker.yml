@@ -12,6 +12,10 @@ jobs:
     uses: drumandbytes/reusable-actions/.github/workflows/deploy-cloudflare-worker.yml@v1
     with:
       working-directory: ingest-worker
+      # Same fix as deploy-api-worker.yml — see its comment. ingest-worker has the identical
+      # @cloudflare/workers-types@^5.x + wrangler@^4.114.0 combination and would hit the same
+      # ERESOLVE conflict on its next deploy otherwise.
+      node-version: "22"
     secrets:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
