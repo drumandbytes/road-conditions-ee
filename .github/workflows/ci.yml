@@ -2,67 +2,18 @@ name: CI
 
 on:
   push:
+  workflow_dispatch:
 
 jobs:
-  lint:
-    name: Lint
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 20
-          cache: npm
-          cache-dependency-path: package-lock.json
-      - run: npm ci
-      - run: npm run lint
+  ci:
+    uses: drumandbytes/reusable-actions/.github/workflows/node-ci.yml@v1
+    with:
+      packages: >-
+        [
+          {"directory": "ingest-worker", "command": "npm run typecheck && npm test"},
+          {"directory": "api-worker",    "command": "npm run typecheck && npm test"},
+          {"directory": "frontend",      "command": "npm run build"}
+        ]
 
-  test-ingest-worker:
-    name: Test ingest-worker
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ingest-worker
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 20
-          cache: npm
-          cache-dependency-path: ingest-worker/package-lock.json
-      - run: npm ci
-      - run: npm run typecheck
-      - run: npm test
-
-  test-api-worker:
-    name: Test api-worker
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: api-worker
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 20
-          cache: npm
-          cache-dependency-path: api-worker/package-lock.json
-      - run: npm ci
-      - run: npm run typecheck
-      - run: npm test
-
-  build-frontend:
-    name: Build frontend
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: frontend
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 20
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-      - run: npm ci
-      - run: npm run build
+  security:
+    uses: drumandbytes/reusable-actions/.github/workflows/security-scan.yml@v1
