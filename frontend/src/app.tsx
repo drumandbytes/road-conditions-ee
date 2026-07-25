@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "preact/hooks";
 import { Map, LAYER_IDS } from "./components/Map";
-import type { LayerId } from "./components/Map";
+import type { LayerId, NearbySearchResult } from "./components/Map";
 import { InfoPanel } from "./components/InfoPanel";
 import { LayerMenu } from "./components/LayerMenu";
+import { SearchBar } from "./components/SearchBar";
 import { CameraModal } from "./components/CameraModal";
 import { WeatherHistoryModal } from "./components/WeatherHistoryModal";
 import { SavedPointEditor } from "./components/SavedPointEditor";
@@ -59,6 +60,8 @@ export function App() {
   const [pinDraft, setPinDraft] = useState<{ lat: number; lng: number } | null>(null);
   const [radiusPreviewKm, setRadiusPreviewKm] = useState<number | null>(null);
   const [visibleLayers, setVisibleLayers] = useState<Record<LayerId, boolean>>(getInitialVisibleLayers);
+  const [searchTarget, setSearchTarget] = useState<{ lat: number; lng: number } | null>(null);
+  const [nearbyResults, setNearbyResults] = useState<NearbySearchResult[]>([]);
   // Bumped after a saved point is created — AccountPanel's saved-points list re-fetches
   // whenever this changes (see SavedPointsSection's effect deps), simpler than threading the
   // new point itself back up through several layers of props.
@@ -175,6 +178,17 @@ export function App() {
         onPinDragEnd={(lat, lng) => setPinDraft({ lat, lng })}
         radiusPreviewKm={radiusPreviewKm}
         visibleLayers={visibleLayers}
+        searchTarget={searchTarget}
+        onNearbyResults={setNearbyResults}
+      />
+      <SearchBar
+        t={t.search}
+        nearbyResults={nearbyResults}
+        onTargetSelected={setSearchTarget}
+        onClear={() => {
+          setSearchTarget(null);
+          setNearbyResults([]);
+        }}
       />
       <InfoPanel
         t={t}

@@ -3,6 +3,15 @@
   "layerMenu": {
     "openButton": "Kaardikihid"
   },
+  "search": {
+    "openButton": "Otsi",
+    "placeholder": "Otsi teed, aadressi, kohta…",
+    "searching": "Otsimine…",
+    "noResults": "Tulemusi ei leitud",
+    "nearbyTitle": "Lähedal",
+    "noNearby": "Läheduses pole midagi näidata",
+    "close": "Sulge"
+  },
   "attribution": "Andmed: Transpordiamet (Tark Tee). Kaart: OpenStreetMap panustajad.",
   "theme": {
     "switchToLight": "Lülitu heledale teemale",

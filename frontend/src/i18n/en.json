@@ -3,6 +3,15 @@
   "layerMenu": {
     "openButton": "Map layers"
   },
+  "search": {
+    "openButton": "Search",
+    "placeholder": "Search for a road, address, place…",
+    "searching": "Searching…",
+    "noResults": "No results",
+    "nearbyTitle": "Nearby",
+    "noNearby": "Nothing nearby to show",
+    "close": "Close"
+  },
   "attribution": "Data: Transpordiamet (Tark Tee). Map: OpenStreetMap contributors.",
   "theme": {
     "switchToLight": "Switch to light theme",

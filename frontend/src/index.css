@@ -28,6 +28,12 @@
   --radius-lg: 1.25rem;
   --shadow-panel: 0 -4px 24px rgba(0, 0, 0, 0.12);
   --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.08);
+  /* .app-header's actual rendered height (confirmed via direct measurement: 60px) — the
+     theme-toggle button's 2.75rem plus the header's own 0.5rem top/bottom padding. Any
+     position:fixed overlay anchored with a `top` offset (search bars, etc.) needs to add this,
+     since `fixed` measures from the viewport, not from below the in-flow header — a flat
+     `top: 1rem` lands underneath/overlapping the header, not below it. */
+  --app-header-height: 3.75rem;
 }
 
 /* Applied by app.tsx based on the resolved theme (explicit light/dark choice, or the
@@ -269,6 +275,30 @@ body,
 .layer-menu-row input[type="checkbox"] {
   accent-color: var(--color-accent);
   cursor: pointer;
+}
+
+/* Third circle stacked above .layer-menu (bottom offset = layer-menu's own 4.5rem + its
+   2.75rem height + a 0.75rem gap), joining the info-button/layer-menu column rather than
+   claiming a new corner — top-left collided with the app header, top-right is MapLibre's own
+   zoom controls, and bottom-right is MapLibre's default attribution control (see .layer-menu's
+   own comment for why that one's out too). */
+.map-search-button {
+  position: absolute;
+  bottom: 8rem;
+  left: 1rem;
+  z-index: 10;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 50%;
+  border: none;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: 1.1rem;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .info-panel {
@@ -1203,12 +1233,17 @@ body,
 
 /* The "add a saved location" flow — deliberately NOT a full-screen dark-scrim overlay like
    .info-overlay, since the whole point is to keep the map visible and draggable underneath
-   while placing the pin. */
+   while placing the pin. fixed (not absolute) since this is a sibling of .map-container in
+   app.tsx, not a descendant of it — there's no positioned ancestor for absolute to anchor to
+   short of the viewport anyway, so fixed is correct; the `top` offset just needs to clear the
+   header explicitly (see --app-header-height) rather than assume 0 is the top of the map.
+   `right` clears MapLibre's own top-right zoom/geolocate control stack (~2.5rem wide) instead
+   of running underneath it. */
 .pin-editor-search-bar {
   position: fixed;
-  top: 1rem;
+  top: calc(var(--app-header-height) + 1rem);
   left: 1rem;
-  right: 1rem;
+  right: 3.5rem;
   z-index: 15;
   display: flex;
   gap: 0.5rem;
@@ -1241,9 +1276,9 @@ body,
 
 .pin-editor-results {
   position: fixed;
-  top: 4rem;
+  top: calc(var(--app-header-height) + 4rem);
   left: 1rem;
-  right: 1rem;
+  right: 3.5rem;
   z-index: 15;
   background: var(--color-bg);
   color: var(--color-text);
@@ -1278,6 +1313,115 @@ body,
 
 .pin-editor-result-item:hover {
   background: var(--color-bg-subtle);
+}
+
+/* The map-search feature — same fixed-overlay-over-a-still-interactive-map treatment as
+   .pin-editor-search-bar/.pin-editor-results above (deliberately not a dark scrim; the whole
+   point is to keep browsing the map while search results are showing), just under its own
+   class names since this is a separate feature/component, not the saved-point flow. `top`
+   offset by --app-header-height for the same reason .pin-editor-search-bar's own comment
+   gives — fixed positioning measures from the viewport, not from below the in-flow header.
+   `right` clears MapLibre's top-right zoom/geolocate controls, same as .pin-editor-search-bar. */
+.map-search-bar {
+  position: fixed;
+  top: calc(var(--app-header-height) + 1rem);
+  left: 1rem;
+  right: 3.5rem;
+  z-index: 15;
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.map-search-input {
+  flex: 1;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  color: var(--color-text);
+  padding: 0.65rem 0.85rem;
+  font-size: 0.9rem;
+  box-shadow: var(--shadow-card);
+}
+
+.map-search-close {
+  flex-shrink: 0;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  border: none;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: 1.2rem;
+  box-shadow: var(--shadow-card);
+  cursor: pointer;
+}
+
+.map-search-results {
+  position: fixed;
+  top: calc(var(--app-header-height) + 4rem);
+  left: 1rem;
+  right: 3.5rem;
+  z-index: 15;
+  background: var(--color-bg);
+  color: var(--color-text);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
+.map-search-results-status {
+  padding: 0.65rem 0.85rem;
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+}
+
+.map-search-result-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: none;
+  color: var(--color-text);
+  padding: 0.65rem 0.85rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.map-search-result-item:last-child {
+  border-bottom: none;
+}
+
+.map-search-result-item:hover {
+  background: var(--color-bg-subtle);
+}
+
+.map-search-nearby-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.map-search-result-dot {
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.map-search-result-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.map-search-result-distance {
+  flex-shrink: 0;
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
 }
 
 .pin-editor-sheet {

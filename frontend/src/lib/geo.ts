@@ -25,6 +25,19 @@ function destinationPoint(lat: number, lng: number, distanceKm: number, bearingD
   return [(lng2 * 180) / Math.PI, (lat2 * 180) / Math.PI];
 }
 
+/** Great-circle distance between two points, in km — standard haversine formula. Used by the
+ *  map search feature to sort nearby hazards/cameras/etc. by distance from a searched point;
+ *  ingest-worker has its own server-side copy of the same formula (for saved-point radius
+ *  matching) that this doesn't share, since the two packages don't share code. */
+export function haversineDistanceKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 2 * EARTH_RADIUS_KM * Math.asin(Math.sqrt(a));
+}
+
 /** A GeoJSON Polygon approximating a `radiusKm` circle centered on (lat, lng) — a naive
  *  pixel-radius circle would be visually wrong at Estonia's latitudes and misleading for a
  *  feature whose whole point is showing the real coverage area. */

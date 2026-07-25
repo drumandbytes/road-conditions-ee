@@ -4,9 +4,24 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import { Protocol } from "pmtiles";
 import { layers, namedFlavor } from "@protomaps/basemaps";
 import { ESTONIA_BOUNDS, MAX_PAN_BOUNDS, ESTONIA_TILES_URL } from "../lib/config";
-import { circlePolygon } from "../lib/geo";
+import { circlePolygon, haversineDistanceKm } from "../lib/geo";
 import { getCameras, getHazards, getRestrictions, getVmsSigns, getWeatherStations } from "../lib/api";
 import type { Locale } from "./InfoPanel";
+
+// Search results are capped rather than showing every hazard/restriction/etc. within some
+// radius — a bare distance cutoff can return zero results in sparse areas or hundreds in a
+// dense one (central Tallinn), whereas "closest N regardless of raw distance" always gives a
+// useful, bounded list.
+const MAX_NEARBY_RESULTS = 25;
+
+export interface NearbySearchResult {
+  id: string;
+  layerId: Exclude<LayerId, "vms">;
+  label: string;
+  distanceKm: number;
+  lat: number;
+  lng: number;
+}
 
 // Registered once at module scope, not per-mount — addProtocol is a global maplibregl
 // registration, re-adding it on every component mount/unmount would be redundant.
@@ -278,6 +293,19 @@ function buildHazardPopupHtml(properties: Record<string, unknown>, locale: Local
     ${description ? `<div class="map-popup-desc">${description}</div>` : ""}
     ${timeLine ? `<div class="map-popup-meta">${timeLine}</div>` : ""}
   `;
+}
+
+// Reuses the same label lookups the popups above already use, so a search result and its
+// popup never disagree on what to call the same feature — not escaped (unlike the popup HTML
+// builders above), since this feeds a Preact text node, not innerHTML.
+function hazardSearchLabel(properties: Record<string, unknown>, t: PopupsT): string {
+  const eventType = String(properties.eventType ?? "");
+  const labelKey = HAZARD_LABEL_KEY[eventType];
+  return labelKey ? t[labelKey] : eventType;
+}
+
+function restrictionSearchLabel(properties: Record<string, unknown>, t: PopupsT): string {
+  return properties.roadName ? String(properties.roadName) : t.restrictionRoad;
 }
 
 const RESTRICTION_CAUSE_LABEL_KEY: Record<string, keyof PopupsT> = {
@@ -657,6 +685,11 @@ interface MapProps {
   // SavedPointEditor's radius slider. null while that slider isn't visible.
   radiusPreviewKm: number | null;
   visibleLayers: Record<LayerId, boolean>;
+  // The map-search feature (see SearchBar.tsx) — a plain, non-draggable marker shown at the
+  // searched point, separate from pinDraft's draggable teal one so the two flows (searching
+  // vs. placing a new saved-point) never visually or behaviorally overlap.
+  searchTarget: { lat: number; lng: number } | null;
+  onNearbyResults: (results: NearbySearchResult[]) => void;
 }
 
 export function Map({
@@ -670,6 +703,8 @@ export function Map({
   onPinDragEnd,
   radiusPreviewKm,
   visibleLayers,
+  searchTarget,
+  onNearbyResults,
 }: MapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   // Gates the loading overlay — without this, a slow or interrupted tile fetch (confirmed:
@@ -691,8 +726,20 @@ export function Map({
   // inline closure on every render, same as onCameraClick/onViewHistory elsewhere in this file.
   const mapRef = useRef<maplibregl.Map | undefined>(undefined);
   const pinMarkerRef = useRef<maplibregl.Marker | undefined>(undefined);
+  const searchMarkerRef = useRef<maplibregl.Marker | undefined>(undefined);
   const onPinDragEndRef = useRef(onPinDragEnd);
   onPinDragEndRef.current = onPinDragEnd;
+  const onNearbyResultsRef = useRef(onNearbyResults);
+  onNearbyResultsRef.current = onNearbyResults;
+  // Raw feature collections for the four free layers, captured once they've loaded — lets the
+  // search-target effect below compute distances without a second fetch of data the map
+  // already has. VMS deliberately excluded (see NearbySearchResult's own comment).
+  const loadedLayersRef = useRef<{
+    weatherStations: GeoJSON.FeatureCollection | null;
+    cameras: GeoJSON.FeatureCollection | null;
+    hazards: GeoJSON.FeatureCollection | null;
+    restrictions: GeoJSON.FeatureCollection | null;
+  }>({ weatherStations: null, cameras: null, hazards: null, restrictions: null });
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -820,6 +867,7 @@ export function Map({
             ]),
           )
           .then(([weatherStations, cameras, hazards, restrictions]) => {
+            loadedLayersRef.current = { weatherStations, cameras, hazards, restrictions };
             const addedLayerIds: (keyof typeof CLUSTER_LAYER_PAINT)[] = [];
             if (weatherStations) {
               addClusteredSource(map!, "weatherStations", weatherStations, {
@@ -904,6 +952,8 @@ export function Map({
       resizeObserver.disconnect();
       pinMarkerRef.current?.remove();
       pinMarkerRef.current = undefined;
+      searchMarkerRef.current?.remove();
+      searchMarkerRef.current = undefined;
       mapRef.current = undefined;
       map?.remove();
     };
@@ -955,6 +1005,58 @@ export function Map({
       map.easeTo({ center: [pinDraft.lng, pinDraft.lat], zoom: Math.max(map.getZoom(), 14) });
     }
   }, [pinDraft]);
+
+  // Non-draggable marker for the map-search feature (see SearchBar.tsx) — kept separate from
+  // the pinDraft marker above so searching and placing a new saved-point pin never conflict
+  // visually or behaviorally. Also (re)computes the nearby-results list whenever the target
+  // changes, from whichever layer data has already loaded into loadedLayersRef rather than
+  // fetching anything new.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    if (!searchTarget) {
+      searchMarkerRef.current?.remove();
+      searchMarkerRef.current = undefined;
+      return;
+    }
+
+    if (!searchMarkerRef.current) {
+      searchMarkerRef.current = new maplibregl.Marker({ color: "#8e44ad" })
+        .setLngLat([searchTarget.lng, searchTarget.lat])
+        .addTo(map);
+    } else {
+      searchMarkerRef.current.setLngLat([searchTarget.lng, searchTarget.lat]);
+    }
+    map.easeTo({ center: [searchTarget.lng, searchTarget.lat], zoom: Math.max(map.getZoom(), 12) });
+
+    const results: NearbySearchResult[] = [];
+    const { weatherStations, cameras, hazards, restrictions } = loadedLayersRef.current;
+    const layerCollections: [Exclude<LayerId, "vms">, GeoJSON.FeatureCollection | null][] = [
+      ["weatherStations", weatherStations],
+      ["cameras", cameras],
+      ["hazards", hazards],
+      ["restrictions", restrictions],
+    ];
+    for (const [layerId, collection] of layerCollections) {
+      if (!collection) continue;
+      for (const feature of collection.features) {
+        if (feature.geometry.type !== "Point") continue;
+        const [lng, lat] = feature.geometry.coordinates;
+        const properties = feature.properties ?? {};
+        const distanceKm = haversineDistanceKm(searchTarget.lat, searchTarget.lng, lat, lng);
+        const label =
+          layerId === "hazards"
+            ? hazardSearchLabel(properties, popupsT)
+            : layerId === "restrictions"
+              ? restrictionSearchLabel(properties, popupsT)
+              : String(properties.name ?? "");
+        results.push({ id: `${layerId}-${properties.id}`, layerId, label, distanceKm, lat, lng });
+      }
+    }
+    results.sort((a, b) => a.distanceKm - b.distanceKm);
+    onNearbyResultsRef.current(results.slice(0, MAX_NEARBY_RESULTS));
+  }, [searchTarget]);
 
   // Keeps the radius-preview polygon in sync with the pin position and the slider in
   // SavedPointEditor. The source is guaranteed to exist once the map has loaded (added
