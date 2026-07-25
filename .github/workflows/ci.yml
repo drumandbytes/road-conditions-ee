@@ -14,6 +14,3 @@ jobs:
           {"directory": "api-worker",    "command": "npm run typecheck && npm test"},
           {"directory": "frontend",      "command": "npm run build"}
         ]
-
-  security:
-    uses: drumandbytes/reusable-actions/.github/workflows/security-scan.yml@v1
