@@ -9,7 +9,7 @@
     "deploy:all": "npm run deploy:ingest-worker && npm run deploy:api-worker && npm run deploy:frontend"
   },
   "devDependencies": {
-    "eslint": "^10.1.0",
-    "typescript-eslint": "^8.57.1"
+    "eslint": "^10.8.0",
+    "typescript-eslint": "^8.65.0"
   }
 }
