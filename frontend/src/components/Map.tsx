@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import maplibregl from "maplibre-gl";
+// maplibre-gl v6 removed its default export; use a namespace import.
+import * as maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { Protocol } from "pmtiles";
 import { layers, namedFlavor } from "@protomaps/basemaps";
@@ -544,7 +545,7 @@ function addClusteredSource(
   // Clicking a cluster zooms in to the level where it starts splitting into smaller
   // clusters/individual points, centered on the cluster — standard MapLibre pattern using
   // the source's own getClusterExpansionZoom, not a fixed zoom increment.
-  map.on("click", `${id}-clusters`, async (e) => {
+  map.on("click", `${id}-clusters`, async (e: maplibregl.MapLayerMouseEvent) => {
     const features = map.queryRenderedFeatures(e.point, { layers: [`${id}-clusters`] });
     const feature = features[0];
     if (!feature || feature.geometry.type !== "Point") return;
@@ -649,7 +650,7 @@ function setupPointClickHandling(
   onCameraClick: (id: string, name: string) => void,
   onViewHistory: (stationName: string) => void,
 ) {
-  map.on("click", (e) => {
+  map.on("click", (e: maplibregl.MapMouseEvent) => {
     const features = map.queryRenderedFeatures(e.point, { layers: pointLayerIds });
     if (features.length === 0) return;
 
