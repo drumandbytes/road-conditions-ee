@@ -12,5 +12,11 @@
   <body>
     <div id="app"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <!-- Cloudflare Web Analytics — cookieless, no consent banner needed. Token is scoped to
+         this hostname only (not the whole drumandbytes.ee zone) via manual JS-snippet install,
+         chosen over the zone-level automatic option so unrelated properties under the same
+         domain aren't opted into tracking. Not a secret — tokens are domain-locked and safe to
+         expose in HTML. -->
+    <script type="module" src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "72c82aa6897748678a9b235e0abd4cd4"}'></script>
   </body>
 </html>
