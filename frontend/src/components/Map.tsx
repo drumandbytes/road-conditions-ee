@@ -2,13 +2,6 @@ import { useEffect, useRef, useState } from "preact/hooks";
 // maplibre-gl v6 removed its default export; use a namespace import.
 import * as maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
-// maplibre-gl resolves its worker script at runtime via `new URL("./" + name, import.meta.url)`
-// with a *computed* filename — Vite's static-asset analysis only follows a literal string, so
-// it never emits maplibre-gl-worker.mjs into the build and the runtime lookup 404s (surfaced as
-// a "non-JavaScript MIME type" error, since the host's SPA fallback serves index.html for the
-// 404 instead of a real 404). The `?url` import forces Vite to bundle this specific file and
-// give us its real built URL, which we then hand to maplibre-gl explicitly.
-import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?url";
 import { Protocol } from "pmtiles";
 import { layers, namedFlavor } from "@protomaps/basemaps";
 import { ESTONIA_BOUNDS, MAX_PAN_BOUNDS, ESTONIA_TILES_URL } from "../lib/config";
@@ -35,7 +28,15 @@ export interface NearbySearchResult {
 // registration, re-adding it on every component mount/unmount would be redundant.
 const protocol = new Protocol();
 maplibregl.addProtocol("pmtiles", protocol.tile);
-maplibregl.setWorkerUrl(maplibreWorkerUrl);
+// maplibre-gl resolves its worker script at runtime via `new URL("./" + name, import.meta.url)`
+// with a *computed* filename, so Vite's static-asset analysis (which only follows literal
+// string arguments) never bundles it — and worker.mjs itself then imports shared.mjs by a bare
+// relative path, so even bundling just the worker file alone (e.g. via a `?url` import) breaks
+// that second import once Vite hashes/relocates it. Both files are copied verbatim, unhashed,
+// side by side into public/maplibre by the postinstall script (see package.json) so the
+// relative import between them keeps working, and we point maplibre-gl at that static path
+// directly instead of letting it guess its own worker URL.
+maplibregl.setWorkerUrl("/maplibre/maplibre-gl-worker.mjs");
 
 const CLUSTER_LAYER_PAINT = {
   weatherStations: "#2e9bff",

@@ -12,6 +12,11 @@ dist
 dist-ssr
 *.local
 
+# Copied from node_modules/maplibre-gl by the postinstall script (see package.json) — worker.mjs
+# imports shared.mjs by a relative path, so both must sit unhashed, side by side, as static
+# public assets rather than going through Vite's hashed asset pipeline.
+public/maplibre
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
