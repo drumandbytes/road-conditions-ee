@@ -1,4 +1,5 @@
-import { authenticatePaidUser } from "./src/auth";
+import { authenticatePaidUser, authenticateUser } from "./src/auth";
+import { handleDeleteAccount } from "./src/routes/account";
 import { corsHeaders, handlePreflight, isAllowedOrigin } from "./src/cors";
 import { handleCameraImage, handleCameras } from "./src/routes/cameras";
 import { handleCheckout, handleCheckoutSession, handlePortal } from "./src/routes/checkout";
@@ -131,6 +132,12 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (method === "PATCH" && pathname === "/api/email-preferences") {
     const user = await authenticatePaidUser(env.DB, request);
     return handleUpdateEmailPreferences(request, env.DB, user);
+  }
+  // Not authenticatePaidUser — a canceled/free-tier accountholder still owns their account and
+  // its data, and still has every right to delete it (see authenticateUser's own comment).
+  if (method === "DELETE" && pathname === "/api/account") {
+    const user = await authenticateUser(env.DB, request);
+    return handleDeleteAccount(user, env);
   }
 
   // Public one-click unsubscribe — no auth (see unsubscribe.ts's own comment on why).

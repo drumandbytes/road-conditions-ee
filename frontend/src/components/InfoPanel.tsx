@@ -114,6 +114,11 @@ interface InfoPanelProps {
       error: string;
       signedInAs: string;
       productUpdatesOptInLabel: string;
+      deleteAccountButton: string;
+      deleteAccountPrompt: string;
+      deleteAccountConfirmButton: string;
+      deleteAccountCancelButton: string;
+      deleteAccountError: string;
     } & FeatureComparisonT;
     savedPoints: SavedPointsSectionT;
     signIn: SignInFormT;

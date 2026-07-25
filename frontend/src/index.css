@@ -1144,6 +1144,27 @@ body,
   background: var(--color-border);
 }
 
+.account-button-danger {
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+}
+
+.account-button-danger:hover:not(:disabled) {
+  background: var(--color-danger);
+  color: #fff;
+}
+
+.account-danger-zone {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.account-danger-zone-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
 .account-link-button {
   display: block;
   margin-top: 0.75rem;

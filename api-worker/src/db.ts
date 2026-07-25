@@ -300,6 +300,15 @@ export async function getUserByEmail(db: D1Database, email: string): Promise<Use
   return row ?? null;
 }
 
+/** Deletes the user row itself — every other user-owned table (saved_points,
+ *  push_subscriptions, login_tokens, email_preferences) cascades via its own foreign key (see
+ *  shared/schema.sql), so this single DELETE is the entire account/data deletion. Caller is
+ *  responsible for cancelling any live Stripe subscription first (see routes/account.ts) —
+ *  this function only ever touches D1, never Stripe. */
+export async function deleteUser(db: D1Database, userId: string): Promise<void> {
+  await db.prepare("DELETE FROM users WHERE id = ?").bind(userId).run();
+}
+
 /** How many login tokens this user has had issued in the last `windowMinutes` — used to cap
  *  how many sign-in emails one account can trigger in a short window (see
  *  handleRequestLogin), independent of whether those tokens were ever used. */

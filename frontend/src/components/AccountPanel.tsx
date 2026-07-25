@@ -1,5 +1,5 @@
 import { useEffect, useState } from "preact/hooks";
-import { BEARER_TOKEN_CHANGED_EVENT, getAccountStatus, startCheckout, startPortalSession } from "../lib/api";
+import { BEARER_TOKEN_CHANGED_EVENT, deleteAccount, getAccountStatus, startCheckout, startPortalSession } from "../lib/api";
 import type { AccountStatus, Plan } from "../lib/api";
 import { EmailPreferencesSection } from "./EmailPreferencesSection";
 import type { EmailPreferencesT } from "./EmailPreferencesSection";
@@ -36,6 +36,11 @@ interface AccountPanelProps {
       error: string;
       signedInAs: string;
       productUpdatesOptInLabel: string;
+      deleteAccountButton: string;
+      deleteAccountPrompt: string;
+      deleteAccountConfirmButton: string;
+      deleteAccountCancelButton: string;
+      deleteAccountError: string;
     } & FeatureComparisonT;
     savedPoints: SavedPointsSectionT;
     signIn: SignInFormT;
@@ -55,6 +60,9 @@ const PLAN_LABEL_KEYS = {
 export function AccountPanel({ t, savedPointsRefreshKey, onAddSavedPoint }: AccountPanelProps) {
   const [state, setState] = useState<LoadState>({ status: "loading" });
   const [busy, setBusy] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState(false);
   // Opt-in, unchecked by default — captured here (not on Stripe's hosted Checkout page, which
   // has no native checkbox custom field and whose built-in promotions-consent collection is
   // US-merchant-only) and carried through to checkout.session's metadata, see checkout.ts.
@@ -110,6 +118,22 @@ export function AccountPanel({ t, savedPointsRefreshKey, onAddSavedPoint }: Acco
     } catch {
       setState({ status: "error" });
       setBusy(false);
+    }
+  }
+
+  async function onDeleteAccount() {
+    setDeleting(true);
+    setDeleteError(false);
+    try {
+      await deleteAccount();
+      // deleteAccount() already cleared the local token and fired BEARER_TOKEN_CHANGED_EVENT,
+      // which this component's own effect listens for — that's what moves state back to
+      // "signedOut", not this call directly.
+    } catch {
+      setDeleteError(true);
+      setConfirmingDelete(false);
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -184,6 +208,44 @@ export function AccountPanel({ t, savedPointsRefreshKey, onAddSavedPoint }: Acco
 
       {(state.status === "active" || state.status === "lifetime") && (
         <EmailPreferencesSection t={t.emailPreferences} />
+      )}
+
+      {(state.status === "active" || state.status === "lifetime") && (
+        <div class="account-danger-zone">
+          {deleteError && <p class="account-alert account-alert-error">{t.account.deleteAccountError}</p>}
+          {!confirmingDelete && (
+            <button
+              type="button"
+              class="account-button account-button-danger"
+              onClick={() => setConfirmingDelete(true)}
+            >
+              {t.account.deleteAccountButton}
+            </button>
+          )}
+          {confirmingDelete && (
+            <>
+              <p class="account-alert account-alert-error">{t.account.deleteAccountPrompt}</p>
+              <div class="account-danger-zone-actions">
+                <button
+                  type="button"
+                  class="account-button account-button-secondary"
+                  onClick={() => setConfirmingDelete(false)}
+                  disabled={deleting}
+                >
+                  {t.account.deleteAccountCancelButton}
+                </button>
+                <button
+                  type="button"
+                  class="account-button account-button-danger"
+                  onClick={onDeleteAccount}
+                  disabled={deleting}
+                >
+                  {t.account.deleteAccountConfirmButton}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
       )}
     </>
   );

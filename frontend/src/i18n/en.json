@@ -172,7 +172,12 @@
     "comparisonVmsLive": "Live sign speed limits & warnings",
     "comparisonHistory": "Weather station history & graphs",
     "comparisonAlerts": "Saved locations & push alerts",
-    "productUpdatesOptInLabel": "Email me about new features and product updates (occasional, opt-in only)"
+    "productUpdatesOptInLabel": "Email me about new features and product updates (occasional, opt-in only)",
+    "deleteAccountButton": "Delete account",
+    "deleteAccountPrompt": "This permanently deletes your account, saved locations, and push subscriptions. This can't be undone.",
+    "deleteAccountConfirmButton": "Yes, delete everything",
+    "deleteAccountCancelButton": "Cancel",
+    "deleteAccountError": "Couldn't delete your account. Try again in a moment."
   },
   "emailPreferences": {
     "title": "Email preferences",

@@ -19,6 +19,14 @@ export function setBearerToken(token: string): void {
   window.dispatchEvent(new Event(BEARER_TOKEN_CHANGED_EVENT));
 }
 
+// Clears the local token and fires the same event setBearerToken does, so AccountPanel's
+// listener re-fetches /api/me and lands back on "signedOut" without needing a page reload —
+// used both after a successful account deletion and (in principle) any future sign-out action.
+function clearBearerToken(): void {
+  localStorage.removeItem(BEARER_TOKEN_KEY);
+  window.dispatchEvent(new Event(BEARER_TOKEN_CHANGED_EVENT));
+}
+
 async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
   const token = getBearerToken();
   const headers = new Headers(init?.headers);
@@ -158,6 +166,16 @@ export async function updateEmailPreferences(patch: Partial<EmailPreferences>): 
   });
   if (!res.ok) throw new Error("Failed to update email preferences");
   return res.json();
+}
+
+/** Deletes the account and every row tied to it (server-side cascade — see api-worker's
+ *  deleteUser). Clears the local bearer token only on success, so a failed request (e.g. the
+ *  backend couldn't cancel an active Stripe subscription) leaves the caller still signed in
+ *  rather than locally "logged out" of an account that in fact still exists. */
+export async function deleteAccount(): Promise<void> {
+  const res = await apiFetch("/api/account", { method: "DELETE" });
+  if (!res.ok) throw new Error("Failed to delete account");
+  clearBearerToken();
 }
 
 /** Requests a magic sign-in link for an already-paying account on a *new* device. Always

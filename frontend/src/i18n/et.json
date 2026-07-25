@@ -172,7 +172,12 @@
     "comparisonVmsLive": "Liiklusmärkide reaalajas kiiruspiirangud ja hoiatused",
     "comparisonHistory": "Ilmajaamade ajalugu ja graafikud",
     "comparisonAlerts": "Salvestatud asukohad ja push-teavitused",
-    "productUpdatesOptInLabel": "Saada mulle e-kirju uute funktsioonide ja uuenduste kohta (harva, ainult soovi korral)"
+    "productUpdatesOptInLabel": "Saada mulle e-kirju uute funktsioonide ja uuenduste kohta (harva, ainult soovi korral)",
+    "deleteAccountButton": "Kustuta konto",
+    "deleteAccountPrompt": "See kustutab jäädavalt sinu konto, salvestatud asukohad ja push-teavituste tellimused. Seda ei saa tagasi võtta.",
+    "deleteAccountConfirmButton": "Jah, kustuta kõik",
+    "deleteAccountCancelButton": "Loobu",
+    "deleteAccountError": "Konto kustutamine ebaõnnestus. Proovi hetke pärast uuesti."
   },
   "emailPreferences": {
     "title": "E-kirjade eelistused",
