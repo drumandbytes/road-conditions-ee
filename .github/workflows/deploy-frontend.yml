@@ -9,9 +9,6 @@ on:
 
 jobs:
   deploy:
-    permissions:
-      contents: read
-      deployments: write
     uses: drumandbytes/reusable-actions/.github/workflows/deploy-cloudflare-pages.yml@v1
     with:
       project-name: road-conditions-ee
