@@ -52,6 +52,21 @@ const TABLE_LABELS: Record<string, string> = {
   cameras: "Cameras",
 };
 
+// Tables whose count already has its own card in Overview/Live data above (users,
+// saved_points, push_subscriptions, hazards, restrictions, cameras, weather_stations,
+// vms_signs) — the Database section's row-count list excludes these so it doesn't just repeat
+// the same numbers a second time; what's left is genuinely only visible there.
+const TABLES_SHOWN_ELSEWHERE = new Set([
+  "users",
+  "saved_points",
+  "push_subscriptions",
+  "hazards",
+  "restrictions",
+  "cameras",
+  "weather_stations",
+  "vms_signs",
+]);
+
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("en-GB", { year: "numeric", month: "short", day: "numeric" });
 }
@@ -107,7 +122,11 @@ export function AdminApp() {
 
   const activeHazardsTotal = stats ? Object.values(stats.activeHazardsByType).reduce((sum, n) => sum + n, 0) : 0;
   const totalUsers = stats ? Object.values(stats.usersByStatus).reduce((sum, n) => sum + n, 0) : 0;
-  const sortedTables = db ? Object.entries(db.tableRowCounts).sort(([, a], [, b]) => b - a) : [];
+  const sortedTables = db
+    ? Object.entries(db.tableRowCounts)
+        .filter(([table]) => !TABLES_SHOWN_ELSEWHERE.has(table))
+        .sort(([, a], [, b]) => b - a)
+    : [];
 
   return (
     <div class="admin-app">
@@ -123,12 +142,17 @@ export function AdminApp() {
               <span class="admin-stat-value">{totalUsers}</span>
               <span class="admin-stat-label">Total users</span>
             </div>
-            {(["free", "active", "canceled", "lifetime"] as const).map((status) => (
-              <div class={`admin-stat-card admin-stat-card--${STATUS_CARD_VARIANT[status]}`} key={status}>
-                <span class="admin-stat-value">{stats.usersByStatus[status] ?? 0}</span>
-                <span class="admin-stat-label">{STATUS_LABELS[status]}</span>
-              </div>
-            ))}
+            <div class="admin-stat-card admin-breakdown-card">
+              <ul class="admin-breakdown-list">
+                {(["free", "active", "canceled", "lifetime"] as const).map((status) => (
+                  <li key={status}>
+                    <span class={`admin-breakdown-dot admin-breakdown-dot--${STATUS_CARD_VARIANT[status]}`} />
+                    <span class="admin-breakdown-label">{STATUS_LABELS[status]}</span>
+                    <span class="admin-breakdown-value">{stats.usersByStatus[status] ?? 0}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
             <div class="admin-stat-card admin-stat-card--accent">
               <span class="admin-stat-value">{stats.totalSavedPoints}</span>
               <span class="admin-stat-label">Saved locations</span>

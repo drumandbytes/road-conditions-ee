@@ -49,10 +49,20 @@ body {
   color: var(--color-danger);
 }
 
+/* Fixed column count rather than auto-fit — auto-fit collapses empty tracks, which stretches
+   a lone leftover card (e.g. the 5th item in a row of 4) to fill the entire row width. A fixed
+   count leaves genuinely empty grid cells instead, so every card keeps the same width whether
+   or not the row is full. */
 .admin-stat-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+  grid-template-columns: repeat(4, 1fr);
   gap: 0.75rem;
+}
+
+@media (max-width: 700px) {
+  .admin-stat-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 
 .admin-stat-card {
@@ -82,6 +92,62 @@ body {
 
 .admin-stat-card--accent {
   --card-accent: var(--color-accent);
+}
+
+/* A single card holding several small label:value rows (e.g. user status breakdown) instead
+   of one big number — for a set of counts that are really sub-parts of one whole, rather than
+   independent metrics that each deserve their own full stat card. */
+.admin-breakdown-card {
+  justify-content: center;
+}
+
+.admin-breakdown-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.admin-breakdown-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.admin-breakdown-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.admin-breakdown-dot--neutral {
+  background: var(--color-text-secondary);
+}
+
+.admin-breakdown-dot--success {
+  background: var(--color-success);
+}
+
+.admin-breakdown-dot--danger {
+  background: var(--color-danger);
+}
+
+.admin-breakdown-dot--gold {
+  background: var(--color-gold);
+}
+
+.admin-breakdown-label {
+  flex: 1;
+  color: var(--color-text-secondary);
+}
+
+.admin-breakdown-value {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 
 .admin-stat-value {
