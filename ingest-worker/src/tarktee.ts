@@ -221,6 +221,10 @@ export interface HazardPollResult {
   // so the caller can persist it to R2 for long-term overview (situations/usable trends per
   // feed, how often a given endpoint errors), not only console output's ~14-day retention.
   perFeed: Record<string, HazardFeedSummary>;
+  // True if any feed errored or had to skip a record — folded into the caller's own
+  // per-cycle outcome (see index.ts's pollFast) so a partial hazard failure still bumps that
+  // one combined log line to WARN, without this function logging anything itself.
+  hasIssue: boolean;
 }
 
 // allSettled, not all — the 7 SRTI endpoints are independent feeds (confirmed in production:
@@ -229,9 +233,10 @@ export interface HazardPollResult {
 // leaving the hazards table permanently empty despite most feeds working fine). One endpoint
 // being down is Tark Tee's problem, not a reason to also lose everyone else's hazard data.
 //
-// Logs exactly once per poll cycle (one combined structured line covering all 7 feeds) rather
-// than once per feed — Workers Logs bills/counts per log event, and 7+ separate lines every 3
-// minutes adds up fast for no benefit over one line with the same information.
+// Deliberately doesn't log anything itself — the caller folds perFeed/hasIssue into the single
+// combined line it already logs once per poll cycle (see index.ts's persistCycleSummary).
+// Workers Logs bills/counts per log event, and a second line here on top of that would double
+// the per-cycle log volume for no benefit over the one line already carrying this data.
 export async function fetchAllHazards(apiKey: string | undefined): Promise<HazardPollResult> {
   const eventTypes = Object.keys(SRTI_ENDPOINTS) as HazardEventType[];
   const results = await Promise.allSettled(eventTypes.map((type) => fetchHazards(apiKey, type)));
@@ -258,7 +263,5 @@ export async function fetchAllHazards(apiKey: string | undefined): Promise<Hazar
       hasIssue = true;
     }
   }
-  const log = hasIssue ? console.error : console.log;
-  log("[ingest-worker] hazard poll:", JSON.stringify(perFeed));
-  return { records, perFeed };
+  return { records, perFeed, hasIssue };
 }

@@ -93,7 +93,11 @@ async function persistCycleSummary(
   cycle: "pollFast" | "pollSlow",
   outcomes: Record<string, StepOutcome>,
 ): Promise<void> {
-  const hasFailure = Object.values(outcomes).some((o) => !o.ok);
+  // !o.ok catches a step that threw; o.hasIssue catches one that didn't throw but still hit a
+  // partial problem internally (e.g. fetchAllHazards's Promise.allSettled swallows individual
+  // feed failures into perFeed rather than throwing) — without checking it too, a single feed
+  // erroring would silently stay at INFO instead of surfacing as WARN.
+  const hasFailure = Object.values(outcomes).some((o) => !o.ok || o.hasIssue);
   const entry = log(hasFailure ? "WARN" : "INFO", cycle, { steps: outcomes });
   await persistLog(env.LOG_BUCKET, entry);
 }
@@ -131,9 +135,9 @@ async function pollFast(env: Env): Promise<void> {
     // any hazard row that ever existed would get wiped on the very next poll while the key is
     // unset, since there'd be nothing to distinguish "genuinely zero" from "didn't really fetch".
     if (!env.TARKTEE_API_KEY) return;
-    const { records, perFeed } = await fetchAllHazards(env.TARKTEE_API_KEY);
+    const { records, perFeed, hasIssue } = await fetchAllHazards(env.TARKTEE_API_KEY);
     changedHazards = await upsertHazardsAndGetChanged(env.DB, records);
-    return { changed: changedHazards.length, perFeed };
+    return { changed: changedHazards.length, perFeed, hasIssue };
   });
 
   outcomes.restrictions = await runStep(env, "restrictions", async () => {

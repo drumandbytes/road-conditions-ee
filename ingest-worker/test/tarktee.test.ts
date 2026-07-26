@@ -211,7 +211,6 @@ describe("tarktee.ts", () => {
   // Promise.all's all-or-nothing rejection — the hazards table stayed empty for as long as
   // that one endpoint was down, despite the other 6 feeds working fine.
   it("keeps hazards from feeds that succeeded even when one feed's request fails", async () => {
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const fetchMock = vi.fn().mockImplementation((url: string) => {
       if (url.includes("animalObstacle")) {
         return Promise.resolve({ ok: false, status: 502, statusText: "Bad Gateway" });
@@ -241,15 +240,14 @@ describe("tarktee.ts", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const { records, perFeed } = await fetchAllHazards("test-key-123");
+    const { records, perFeed, hasIssue } = await fetchAllHazards("test-key-123");
 
     expect(records).toEqual([expect.objectContaining({ externalId: "situation-1", eventType: "slippery" })]);
     expect(perFeed.obstacle.error).toContain("502");
     expect(perFeed.slippery).toEqual({ situations: 1, usable: 1 });
-    // One combined log line for the whole poll cycle, not one per feed — see fetchAllHazards's
-    // own comment on why (Workers Logs counts/bills per event).
-    expect(errorSpy).toHaveBeenCalledTimes(1);
-    errorSpy.mockRestore();
+    // hasIssue surfaces the failed feed to the caller's own single combined log line (see
+    // index.ts's persistCycleSummary) — fetchAllHazards itself logs nothing.
+    expect(hasIssue).toBe(true);
   });
 
   it("logs an error when 0 cameras are parsed from a non-trivial response (likely a schema change, not genuinely zero cameras)", async () => {
