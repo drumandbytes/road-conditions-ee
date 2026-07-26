@@ -3,7 +3,16 @@
 // actually require: manual install (browser menu) just needs *a* registered service worker,
 // no fetch handler, since Chrome 108/112; the automatic install-prompt banner still wants one
 // present, hence the trivial passthrough below.
+//
+// Navigations must NOT be intercepted, though — confirmed in production: this SW's default
+// scope (/) covers /admin too, and re-issuing a navigation via fetch(event.request) inside a
+// service worker doesn't complete Cloudflare Access's multi-hop GitHub OAuth redirect chain
+// the same way a real top-level browser navigation does, causing an infinite redirect loop
+// (ERR_TOO_MANY_REDIRECTS, every request in the chain initiated by this very script). Only
+// intercept non-navigation fetches, which is all the "just needs to exist" passthrough below
+// was ever for anyway.
 self.addEventListener("fetch", (event) => {
+  if (event.request.mode === "navigate") return;
   event.respondWith(fetch(event.request));
 });
 
