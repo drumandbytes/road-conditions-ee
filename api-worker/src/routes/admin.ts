@@ -1,8 +1,13 @@
-import { getAdminStats, getAdminUserCount, getAdminUsers } from "../db";
+import { getAdminDbOverview, getAdminStats, getAdminUserCount, getAdminUsers } from "../db";
 
 export async function handleAdminStats(db: D1Database): Promise<Response> {
   const stats = await getAdminStats(db);
   return Response.json(stats);
+}
+
+export async function handleAdminDb(db: D1Database): Promise<Response> {
+  const overview = await getAdminDbOverview(db);
+  return Response.json(overview);
 }
 
 const USERS_PAGE_SIZE = 50;

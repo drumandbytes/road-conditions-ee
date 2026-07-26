@@ -1,7 +1,7 @@
 import { verifyAccessJwt } from "./src/access";
 import { authenticatePaidUser, authenticateUser } from "./src/auth";
 import { handleDeleteAccount } from "./src/routes/account";
-import { handleAdminStats, handleAdminUsers } from "./src/routes/admin";
+import { handleAdminDb, handleAdminStats, handleAdminUsers } from "./src/routes/admin";
 import { corsHeaders, handlePreflight, isAllowedOrigin } from "./src/cors";
 import { handleCameraImage, handleCameras } from "./src/routes/cameras";
 import { handleCheckout, handleCheckoutSession, handlePortal } from "./src/routes/checkout";
@@ -179,6 +179,11 @@ async function route(request: Request, env: Env): Promise<Response> {
     const email = await verifyAccessJwt(request, env.ACCESS_AUD);
     if (!email) return Response.json({ error: "Not authorized" }, { status: 401 });
     return handleAdminUsers(request, env.DB);
+  }
+  if (method === "GET" && pathname === "/api/admin/db") {
+    const email = await verifyAccessJwt(request, env.ACCESS_AUD);
+    if (!email) return Response.json({ error: "Not authorized" }, { status: 401 });
+    return handleAdminDb(env.DB);
   }
 
   return Response.json({ error: "Not found" }, { status: 404 });

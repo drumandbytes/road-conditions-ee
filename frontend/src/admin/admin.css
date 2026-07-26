@@ -1,21 +1,34 @@
 .admin-app {
-  max-width: 960px;
+  max-width: 1040px;
   margin: 0 auto;
-  padding: 1.5rem 1rem 3rem;
+  padding: 2rem 1.25rem 4rem;
   color: var(--color-text);
 }
 
 .admin-app h1 {
-  margin-bottom: 1.5rem;
+  font-size: 1.5rem;
+  letter-spacing: -0.01em;
+  margin-bottom: 2rem;
 }
 
 .admin-app section {
   margin-bottom: 2.5rem;
+  padding-top: 1.75rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.admin-app section:first-of-type {
+  padding-top: 0;
+  border-top: none;
 }
 
 .admin-app h2 {
-  font-size: 1.1rem;
-  margin-bottom: 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-secondary);
+  margin-bottom: 1rem;
 }
 
 .admin-muted {
@@ -28,39 +41,116 @@
 
 .admin-stat-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
   gap: 0.75rem;
 }
 
 .admin-stat-card {
+  --card-accent: var(--color-text-secondary);
+  position: relative;
   background: var(--color-bg-card);
+  box-shadow: var(--shadow-card);
+  border-left: 3px solid var(--card-accent);
   border-radius: var(--radius-md);
-  padding: 1rem;
+  padding: 1rem 1.1rem;
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.3rem;
+}
+
+.admin-stat-card--success {
+  --card-accent: var(--color-success);
+}
+
+.admin-stat-card--danger {
+  --card-accent: var(--color-danger);
+}
+
+.admin-stat-card--gold {
+  --card-accent: var(--color-gold);
+}
+
+.admin-stat-card--accent {
+  --card-accent: var(--color-accent);
 }
 
 .admin-stat-value {
-  font-size: 1.75rem;
+  font-size: 1.85rem;
   font-weight: 700;
+  line-height: 1.1;
   font-variant-numeric: tabular-nums;
 }
 
 .admin-stat-label {
-  font-size: 0.8rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.78rem;
   color: var(--color-text-secondary);
+}
+
+.admin-stat-label::before {
+  content: "";
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 50%;
+  background: var(--card-accent);
+  flex-shrink: 0;
 }
 
 .admin-hazard-breakdown {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem 1.25rem;
-  margin-top: 0.75rem;
+  margin-top: 0.85rem;
   padding: 0;
   list-style: none;
   font-size: 0.85rem;
   color: var(--color-text-secondary);
+}
+
+.admin-hazard-breakdown strong {
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-table-rowcounts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: 0;
+  list-style: none;
+  margin-top: 1rem;
+  padding: 0;
+  background: var(--color-bg-card);
+  box-shadow: var(--shadow-card);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.admin-table-rowcounts li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.65rem 1rem;
+  font-size: 0.85rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.admin-table-rowcounts-name {
+  color: var(--color-text-secondary);
+}
+
+.admin-table-rowcounts-count {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-table-wrap {
+  overflow-x: auto;
+  background: var(--color-bg-card);
+  box-shadow: var(--shadow-card);
+  border-radius: var(--radius-md);
 }
 
 .admin-table {
@@ -72,16 +162,30 @@
 .admin-table th,
 .admin-table td {
   text-align: left;
-  padding: 0.6rem 0.75rem;
+  padding: 0.7rem 1rem;
   border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
 }
 
 .admin-table th {
   color: var(--color-text-secondary);
   font-weight: 600;
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   text-transform: uppercase;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.04em;
+}
+
+.admin-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.admin-table tbody tr:hover {
+  background: var(--color-bg-subtle);
+}
+
+.admin-table-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 
 .admin-pagination {
@@ -101,6 +205,11 @@
   padding: 0.4rem 0.85rem;
   cursor: pointer;
   font-size: 0.85rem;
+}
+
+.admin-pagination button:not(:disabled):hover {
+  background: var(--color-accent);
+  color: #fff;
 }
 
 .admin-pagination button:disabled {

@@ -12,6 +12,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["--prefix", "frontend", "run", "preview", "--", "--port", "4173"],
       "port": 4173
+    },
+    {
+      "name": "api-worker",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "api-worker", "run", "dev", "--", "--port", "8787"],
+      "port": 8787
     }
   ]
 }

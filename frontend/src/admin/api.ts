@@ -51,3 +51,14 @@ export async function getAdminUsers(page: number): Promise<AdminUsersPage> {
   if (!res.ok) throw new Error(`Failed to load users (${res.status})`);
   return res.json();
 }
+
+export interface AdminDbOverview {
+  sizeBytes: number;
+  tableRowCounts: Record<string, number>;
+}
+
+export async function getAdminDb(): Promise<AdminDbOverview> {
+  const res = await adminFetch("/api/admin/db");
+  if (!res.ok) throw new Error(`Failed to load db overview (${res.status})`);
+  return res.json();
+}

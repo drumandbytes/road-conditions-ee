@@ -944,6 +944,16 @@ body,
   color: var(--color-gold);
 }
 
+.status-badge-canceled {
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+}
+
+.status-badge-free {
+  background: var(--color-bg-subtle);
+  color: var(--color-text-secondary);
+}
+
 .account-email {
   font-size: 0.85rem;
   color: var(--color-text-secondary);

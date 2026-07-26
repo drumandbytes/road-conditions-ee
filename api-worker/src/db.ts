@@ -494,3 +494,41 @@ export async function getAdminUserCount(db: D1Database): Promise<number> {
   const row = await db.prepare("SELECT COUNT(*) AS n FROM users").first<{ n: number }>();
   return row?.n ?? 0;
 }
+
+// Every table in shared/schema.sql — deliberately not just the "interesting" ones already
+// covered by getAdminStats, since the point of this overview is "what's actually in the
+// database," not a curated subset.
+const ALL_TABLES = [
+  "users",
+  "login_tokens",
+  "email_preferences",
+  "push_subscriptions",
+  "saved_points",
+  "hazards",
+  "vms_signs",
+  "weather_stations",
+  "restrictions",
+  "translations",
+  "weather_station_history",
+  "detours",
+  "cameras",
+] as const;
+
+export interface AdminDbOverview {
+  sizeBytes: number;
+  tableRowCounts: Record<string, number>;
+}
+
+export async function getAdminDbOverview(db: D1Database): Promise<AdminDbOverview> {
+  const results = await Promise.all(
+    ALL_TABLES.map((table) => db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).all<{ n: number }>()),
+  );
+  const tableRowCounts: Record<string, number> = {};
+  let sizeBytes = 0;
+  for (let i = 0; i < results.length; i++) {
+    tableRowCounts[ALL_TABLES[i]] = results[i].results[0]?.n ?? 0;
+    // Same total DB size regardless of which query reports it — just take the last one seen.
+    sizeBytes = results[i].meta.size_after ?? sizeBytes;
+  }
+  return { sizeBytes, tableRowCounts };
+}

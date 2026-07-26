@@ -1,17 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { getAdminStats, getAdminUserCount, getAdminUsers } from "../src/db";
+import { getAdminDbOverview, getAdminStats, getAdminUserCount, getAdminUsers } from "../src/db";
 
 /** Returns canned results to successive db.prepare(...) calls, in the exact order the function
  *  under test is expected to make them — works whether the call chain is
  *  prepare().all()/.first() directly (no params) or prepare().bind(...).all()/.first()
  *  (params), since both are real, ordinary D1 usage depending on whether a query has params. */
-function sequentialDb(responses: Array<{ all?: unknown[]; first?: unknown }>): D1Database {
+function sequentialDb(responses: Array<{ all?: unknown[]; first?: unknown; meta?: unknown }>): D1Database {
   let i = 0;
   return {
     prepare: () => {
       const response = responses[i++] ?? {};
       const terminal = {
-        all: async () => ({ results: response.all ?? [] }),
+        all: async () => ({ results: response.all ?? [], meta: response.meta ?? {} }),
         first: async () => response.first ?? null,
       };
       return { ...terminal, bind: () => terminal };
@@ -54,6 +54,46 @@ describe("getAdminStats", () => {
     expect(stats.totalSavedPoints).toBe(0);
     expect(stats.totalRestrictions).toBe(0);
     expect(stats.activeHazardsByType).toEqual({});
+  });
+});
+
+describe("getAdminDbOverview", () => {
+  it("returns a row count for every table plus the database's total size", async () => {
+    // 13 tables in shared/schema.sql — order matches ALL_TABLES in db.ts.
+    const db = sequentialDb([
+      { all: [{ n: 2 }], meta: { size_after: 1000 } }, // users
+      { all: [{ n: 5 }], meta: { size_after: 1000 } }, // login_tokens
+      { all: [{ n: 1 }], meta: { size_after: 1000 } }, // email_preferences
+      { all: [{ n: 1 }], meta: { size_after: 1000 } }, // push_subscriptions
+      { all: [{ n: 2 }], meta: { size_after: 1000 } }, // saved_points
+      { all: [{ n: 14 }], meta: { size_after: 1000 } }, // hazards
+      { all: [{ n: 150 }], meta: { size_after: 1000 } }, // vms_signs
+      { all: [{ n: 117 }], meta: { size_after: 1000 } }, // weather_stations
+      { all: [{ n: 402 }], meta: { size_after: 1000 } }, // restrictions
+      { all: [{ n: 0 }], meta: { size_after: 1000 } }, // translations
+      { all: [{ n: 5000 }], meta: { size_after: 1000 } }, // weather_station_history
+      { all: [{ n: 3 }], meta: { size_after: 1000 } }, // detours
+      { all: [{ n: 179 }], meta: { size_after: 3801088 } }, // cameras (last query, used for size)
+    ]);
+
+    const overview = await getAdminDbOverview(db);
+
+    expect(overview.sizeBytes).toBe(3801088);
+    expect(overview.tableRowCounts).toEqual({
+      users: 2,
+      login_tokens: 5,
+      email_preferences: 1,
+      push_subscriptions: 1,
+      saved_points: 2,
+      hazards: 14,
+      vms_signs: 150,
+      weather_stations: 117,
+      restrictions: 402,
+      translations: 0,
+      weather_station_history: 5000,
+      detours: 3,
+      cameras: 179,
+    });
   });
 });
 
