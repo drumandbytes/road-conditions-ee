@@ -103,6 +103,7 @@
     "guideAccountBody1": "Üks tellimus töötab kõigis sinu seadmetes. Uues seadmes ava Konto vahekaart ja vali \"Juba tellinud? Logi sellel seadmel sisse\", et saada e-kirjaga ühekordne sisselogimislink.",
     "guideAccountBody2": "Halda või tühista oma tellimust igal ajal Konto vahekaardi nupuga \"Halda tellimust\".",
     "guideAccountBody3": "Vali, milliseid e-kirju soovid saada — uuendused, teenuseteated, arved — sisselogituna kuvatavast jaotisest \"E-kirjade eelistused\".",
+    "guideAccountBody4": "Saad oma konto igal ajal jäädavalt kustutada Konto vahekaardi allosas olevast nupust \"Kustuta konto\". See eemaldab sinu salvestatud asukohad, push-teavituste tellimused ja e-kirjade eelistused ning tühistab aktiivse tellimuse — seda ei saa tagasi võtta.",
     "legendTitle": "Legend",
     "legendWeatherStationsTitle": "Ilmajaamad",
     "legendWeatherStationsDesc": "Puuduta tee/õhu temperatuuri, teekatte seisundi, tuule ja haarde nägemiseks.",

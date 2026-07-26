@@ -103,6 +103,7 @@
     "guideAccountBody1": "One subscription works on all your devices. On a new device, open the Account tab and use \"Already subscribed? Sign in on this device\" to get a one-time sign-in link by email.",
     "guideAccountBody2": "Manage or cancel your subscription anytime from the Account tab's \"Manage subscription\" button.",
     "guideAccountBody3": "Choose which emails you receive — product updates, service announcements, billing — from the Email preferences section once you're signed in.",
+    "guideAccountBody4": "You can permanently delete your account at any time from the \"Delete account\" button at the bottom of the Account tab. This removes your saved locations, push subscriptions, and email preferences, and cancels any active subscription — it can't be undone.",
     "legendTitle": "Legend",
     "legendWeatherStationsTitle": "Weather stations",
     "legendWeatherStationsDesc": "Tap for real road/air temperature, surface condition, wind, and grip.",

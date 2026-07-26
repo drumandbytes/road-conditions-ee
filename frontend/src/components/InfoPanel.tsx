@@ -72,6 +72,7 @@ interface InfoPanelProps {
       guideAccountBody1: string;
       guideAccountBody2: string;
       guideAccountBody3: string;
+      guideAccountBody4: string;
       legendTitle: string;
       legendWeatherStationsTitle: string;
       legendWeatherStationsDesc: string;
@@ -306,6 +307,7 @@ export function InfoPanel({
                   <p>{t.info.guideAccountBody1}</p>
                   <p>{t.info.guideAccountBody2}</p>
                   <p>{t.info.guideAccountBody3}</p>
+                  <p>{t.info.guideAccountBody4}</p>
                 </>
               )}
 
