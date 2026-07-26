@@ -412,3 +412,85 @@ export async function updateEmailPreferences(
     .run();
   return next;
 }
+
+export interface AdminStats {
+  usersByStatus: Record<string, number>;
+  totalSavedPoints: number;
+  totalPushSubscriptions: number;
+  // Currently active only (matches getActiveHazards' own filter) — a raw all-time row count
+  // would include hazards Tark Tee is still reporting but that have already ended, which isn't
+  // what "how many hazards right now" should mean for an overview.
+  activeHazardsByType: Record<string, number>;
+  totalRestrictions: number;
+  totalCameras: number;
+  totalWeatherStations: number;
+  totalVmsSigns: number;
+}
+
+export async function getAdminStats(db: D1Database): Promise<AdminStats> {
+  const [statusRows, savedPointsRow, pushSubsRow, hazardTypeRows, restrictionsRow, camerasRow, weatherRow, vmsRow] =
+    await Promise.all([
+      db.prepare("SELECT subscription_status, COUNT(*) AS n FROM users GROUP BY subscription_status").all<{
+        subscription_status: string;
+        n: number;
+      }>(),
+      db.prepare("SELECT COUNT(*) AS n FROM saved_points").first<{ n: number }>(),
+      db.prepare("SELECT COUNT(*) AS n FROM push_subscriptions").first<{ n: number }>(),
+      db
+        .prepare(
+          `SELECT event_type, COUNT(*) AS n FROM hazards
+           WHERE ends_at IS NULL OR ends_at > datetime('now')
+           GROUP BY event_type`,
+        )
+        .all<{ event_type: string; n: number }>(),
+      db.prepare("SELECT COUNT(*) AS n FROM restrictions").first<{ n: number }>(),
+      db.prepare("SELECT COUNT(*) AS n FROM cameras").first<{ n: number }>(),
+      db.prepare("SELECT COUNT(*) AS n FROM weather_stations").first<{ n: number }>(),
+      db.prepare("SELECT COUNT(*) AS n FROM vms_signs").first<{ n: number }>(),
+    ]);
+  const usersByStatus: Record<string, number> = {};
+  for (const row of statusRows.results) usersByStatus[row.subscription_status] = row.n;
+  const activeHazardsByType: Record<string, number> = {};
+  for (const row of hazardTypeRows.results) activeHazardsByType[row.event_type] = row.n;
+  return {
+    usersByStatus,
+    totalSavedPoints: savedPointsRow?.n ?? 0,
+    totalPushSubscriptions: pushSubsRow?.n ?? 0,
+    activeHazardsByType,
+    totalRestrictions: restrictionsRow?.n ?? 0,
+    totalCameras: camerasRow?.n ?? 0,
+    totalWeatherStations: weatherRow?.n ?? 0,
+    totalVmsSigns: vmsRow?.n ?? 0,
+  };
+}
+
+export interface AdminUserRow {
+  id: string;
+  email: string | null;
+  subscription_status: string;
+  created_at: string;
+  saved_point_count: number;
+}
+
+// Correlated subquery (not a JOIN+GROUP BY) so a user with zero saved points still returns
+// exactly one row with count 0, matching the same pattern getRestrictions already uses for
+// detours — simplest way to get a per-user aggregate without collapsing/duplicating the
+// parent row.
+export async function getAdminUsers(db: D1Database, limit: number, offset: number): Promise<AdminUserRow[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT u.id, u.email, u.subscription_status, u.created_at,
+              (SELECT COUNT(*) FROM saved_points WHERE user_id = u.id) AS saved_point_count
+       FROM users u
+       ORDER BY u.created_at DESC
+       LIMIT ? OFFSET ?`,
+    )
+    .bind(limit, offset)
+    .all<AdminUserRow>();
+  return results;
+}
+
+export async function getAdminUserCount(db: D1Database): Promise<number> {
+  const row = await db.prepare("SELECT COUNT(*) AS n FROM users").first<{ n: number }>();
+  return row?.n ?? 0;
+}

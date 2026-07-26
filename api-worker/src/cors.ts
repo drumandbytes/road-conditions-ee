@@ -22,6 +22,11 @@ export function corsHeaders(origin: string): Record<string, string> {
     "Access-Control-Allow-Origin": origin,
     "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
     "Access-Control-Allow-Headers": "Authorization, Content-Type",
+    // Needed for the admin page's fetch(url, {credentials: "include"}) calls — the browser
+    // won't expose a cross-origin response to JS when credentials are sent unless the server
+    // explicitly opts in, even though Allow-Origin here is always a specific matched origin,
+    // never "*" (browsers reject the "*"+credentials combination anyway).
+    "Access-Control-Allow-Credentials": "true",
     Vary: "Origin",
   };
 }

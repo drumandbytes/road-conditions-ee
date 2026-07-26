@@ -1,0 +1,4 @@
+# Rewrite (200, not a redirect) so the URL bar stays /admin rather than exposing admin.html —
+# the actual protection is Cloudflare Access gating this path at the edge (see the "Teesilm
+# Admin" self-hosted Access application), this is just routing.
+/admin /admin.html 200

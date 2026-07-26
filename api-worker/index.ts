@@ -1,5 +1,7 @@
+import { verifyAccessJwt } from "./src/access";
 import { authenticatePaidUser, authenticateUser } from "./src/auth";
 import { handleDeleteAccount } from "./src/routes/account";
+import { handleAdminStats, handleAdminUsers } from "./src/routes/admin";
 import { corsHeaders, handlePreflight, isAllowedOrigin } from "./src/cors";
 import { handleCameraImage, handleCameras } from "./src/routes/cameras";
 import { handleCheckout, handleCheckoutSession, handlePortal } from "./src/routes/checkout";
@@ -24,6 +26,10 @@ interface Env {
   UNSUBSCRIBE_SECRET?: string;
   GEOCODE_RATE_LIMITER?: RateLimit;
   CHECKOUT_RATE_LIMITER?: RateLimit;
+  // The "Teesilm Admin" Access application's own Application Audience (AUD) tag — not a
+  // secret, just an identifier scoping JWT verification to this specific application. See
+  // src/access.ts.
+  ACCESS_AUD?: string;
 }
 
 export default {
@@ -159,6 +165,20 @@ async function route(request: Request, env: Env): Promise<Response> {
   }
   if (method === "POST" && pathname === "/api/stripe-webhook") {
     return handleStripeWebhook(request, env);
+  }
+
+  // Cloudflare Access already blocks unauthenticated requests to this path at the edge (see
+  // the "Teesilm Admin" self-hosted Access application) — verifyAccessJwt is defense-in-depth,
+  // not the primary gate, see src/access.ts's own comment.
+  if (method === "GET" && pathname === "/api/admin/stats") {
+    const email = await verifyAccessJwt(request, env.ACCESS_AUD);
+    if (!email) return Response.json({ error: "Not authorized" }, { status: 401 });
+    return handleAdminStats(env.DB);
+  }
+  if (method === "GET" && pathname === "/api/admin/users") {
+    const email = await verifyAccessJwt(request, env.ACCESS_AUD);
+    if (!email) return Response.json({ error: "Not authorized" }, { status: 401 });
+    return handleAdminUsers(request, env.DB);
   }
 
   return Response.json({ error: "Not found" }, { status: 404 });
