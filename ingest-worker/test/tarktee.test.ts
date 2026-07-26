@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fetchCamerasMetadata, fetchHazards } from "../src/tarktee";
+import { fetchAllHazards, fetchCamerasMetadata, fetchHazards } from "../src/tarktee";
 
 // Structure captured from a real Tark Tee response (see tarktee.ts's fetchCamerasMetadata
 // comment) — the "Lokuti"/"Nõva" entries, coordinates, and image URL format are real; this
@@ -163,6 +163,47 @@ describe("tarktee.ts", () => {
     const hazards = await fetchHazards("test-key-123", "slippery");
 
     expect(hazards).toEqual([]);
+  });
+
+  // Regression test for a real production incident: Tark Tee's animalObstacle SRTI endpoint
+  // returning a 502 was silently discarding every other hazard type's real data too, via
+  // Promise.all's all-or-nothing rejection — the hazards table stayed empty for as long as
+  // that one endpoint was down, despite the other 6 feeds working fine.
+  it("keeps hazards from feeds that succeeded even when one feed's request fails", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url.includes("animalObstacle")) {
+        return Promise.resolve({ ok: false, status: 502, statusText: "Bad Gateway" });
+      }
+      if (url.includes("temporarySlipperyRoad")) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          statusText: "OK",
+          json: async () => ({
+            situation: [
+              {
+                id: "situation-1",
+                situationRecord: [
+                  { groupOfLocations: { locationForDisplay: { latitude: 59.4, longitude: 24.7 } } },
+                ],
+              },
+            ],
+          }),
+        });
+      }
+      return Promise.resolve({ ok: true, status: 200, statusText: "OK", json: async () => ({ situation: [] }) });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const hazards = await fetchAllHazards("test-key-123");
+
+    expect(hazards).toEqual([expect.objectContaining({ externalId: "situation-1", eventType: "slippery" })]);
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('hazard feed "obstacle" failed'),
+      expect.anything(),
+    );
+    errorSpy.mockRestore();
   });
 
   it("logs an error when 0 cameras are parsed from a non-trivial response (likely a schema change, not genuinely zero cameras)", async () => {

@@ -80,9 +80,9 @@ export async function fetchCamerasMetadata(): Promise<CameraMeta[]> {
   return cameras;
 }
 
-// DATEX II SRTI hazard feed types. Registration-gated (Phase 0 task, submitted — API key
-// pending manual Transpordiamet approval as of writing). These fetches will 401/403 until
-// the key is issued and wired in as a secret; left here ready to use once available.
+// DATEX II SRTI hazard feed types. API key approved and wired in as a secret
+// (TARKTEE_API_KEY). Individual endpoints do occasionally 502 from Tark Tee's own gateway —
+// see fetchAllHazards's own comment for why that no longer takes the other feeds down with it.
 export type HazardEventType =
   | "slippery"
   | "obstacle"
@@ -185,8 +185,22 @@ export async function fetchHazards(
   return records;
 }
 
+// allSettled, not all — the 7 SRTI endpoints are independent feeds (confirmed in production:
+// animalObstacle alone returning a 502 from Tark Tee's own gateway was silently discarding the
+// other 6 endpoints' real data every single poll, via Promise.all's all-or-nothing rejection,
+// leaving the hazards table permanently empty despite most feeds working fine). One endpoint
+// being down is Tark Tee's problem, not a reason to also lose everyone else's hazard data.
 export async function fetchAllHazards(apiKey: string | undefined): Promise<HazardRecord[]> {
   const eventTypes = Object.keys(SRTI_ENDPOINTS) as HazardEventType[];
-  const results = await Promise.all(eventTypes.map((type) => fetchHazards(apiKey, type)));
-  return results.flat();
+  const results = await Promise.allSettled(eventTypes.map((type) => fetchHazards(apiKey, type)));
+  const records: HazardRecord[] = [];
+  for (let i = 0; i < results.length; i++) {
+    const result = results[i];
+    if (result.status === "fulfilled") {
+      records.push(...result.value);
+    } else {
+      console.error(`[ingest-worker] hazard feed "${eventTypes[i]}" failed:`, result.reason);
+    }
+  }
+  return records;
 }
