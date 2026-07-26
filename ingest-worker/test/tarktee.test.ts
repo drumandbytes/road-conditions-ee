@@ -241,16 +241,14 @@ describe("tarktee.ts", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const hazards = await fetchAllHazards("test-key-123");
+    const { records, perFeed } = await fetchAllHazards("test-key-123");
 
-    expect(hazards).toEqual([expect.objectContaining({ externalId: "situation-1", eventType: "slippery" })]);
+    expect(records).toEqual([expect.objectContaining({ externalId: "situation-1", eventType: "slippery" })]);
+    expect(perFeed.obstacle.error).toContain("502");
+    expect(perFeed.slippery).toEqual({ situations: 1, usable: 1 });
     // One combined log line for the whole poll cycle, not one per feed — see fetchAllHazards's
     // own comment on why (Workers Logs counts/bills per event).
     expect(errorSpy).toHaveBeenCalledTimes(1);
-    const [, summaryJson] = errorSpy.mock.calls[0];
-    const summary = JSON.parse(summaryJson as string);
-    expect(summary.obstacle.error).toContain("502");
-    expect(summary.slippery).toEqual({ situations: 1, usable: 1 });
     errorSpy.mockRestore();
   });
 

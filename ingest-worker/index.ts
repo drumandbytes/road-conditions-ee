@@ -53,17 +53,31 @@ export default {
   },
 } satisfies ExportedHandler<Env>;
 
+interface StepOutcome {
+  ok: boolean;
+  error?: string;
+  // Whatever cheap detail the step itself has on hand (record counts, per-feed breakdowns) —
+  // folded into the persisted cycle summary so it's useful for trend analysis later, not just
+  // pass/fail. See individual runStep call sites in pollFast/pollSlow for what each contributes.
+  [key: string]: unknown;
+}
+
 // Each step is isolated — one feed failing (e.g. a malformed response, a transient Tark Tee
 // error) must not prevent the others from running. Confirmed this was a real bug, not a
 // theoretical one: an empty-array crash in the cameras upsert silently killed hazard
 // ingestion too, because everything shared one unguarded async function body.
 //
 // Returns the step's outcome (rather than void) so the caller can fold it into one persisted
-// per-cycle summary — see pollFast/pollSlow — instead of a separate R2 write per step.
-async function runStep(env: Env, name: string, step: () => Promise<void>): Promise<{ ok: boolean; error?: string }> {
+// per-cycle summary — see pollFast/pollSlow — instead of a separate R2 write per step. `step`
+// may return a detail object (merged into the outcome) or nothing.
+async function runStep(
+  env: Env,
+  name: string,
+  step: () => Promise<Record<string, unknown> | void>,
+): Promise<StepOutcome> {
   try {
-    await step();
-    return { ok: true };
+    const detail = await step();
+    return { ok: true, ...detail };
   } catch (err) {
     const message = err instanceof Error ? err.stack ?? err.message : String(err);
     console.error(`[ingest-worker] step "${name}" failed:`, message);
@@ -77,7 +91,7 @@ async function runStep(env: Env, name: string, step: () => Promise<void>): Promi
 async function persistCycleSummary(
   env: Env,
   cycle: "pollFast" | "pollSlow",
-  outcomes: Record<string, { ok: boolean; error?: string }>,
+  outcomes: Record<string, StepOutcome>,
 ): Promise<void> {
   const hasFailure = Object.values(outcomes).some((o) => !o.ok);
   const entry = log(hasFailure ? "WARN" : "INFO", cycle, { steps: outcomes });
@@ -97,7 +111,7 @@ const MAX_PUSH_SENDS_PER_CYCLE = 15;
 async function pollFast(env: Env): Promise<void> {
   let changedHazards: HazardRecord[] = [];
   let changedRestrictions: Restriction[] = [];
-  const outcomes: Record<string, { ok: boolean; error?: string }> = {};
+  const outcomes: Record<string, StepOutcome> = {};
 
   outcomes.weatherReadings = await runStep(env, "weatherReadings", async () => {
     const readings = await fetchWeatherReadings();
@@ -107,6 +121,7 @@ async function pollFast(env: Env): Promise<void> {
     // snapshot actually needs, for a table whose whole point is hourly granularity.
     await upsertWeatherHistory(env.DB, readings, currentHourBucket());
     await pruneWeatherHistory(env.DB, WEATHER_HISTORY_RETENTION_DAYS);
+    return { stations: readings.length };
   });
 
   outcomes.hazards = await runStep(env, "hazards", async () => {
@@ -116,23 +131,27 @@ async function pollFast(env: Env): Promise<void> {
     // any hazard row that ever existed would get wiped on the very next poll while the key is
     // unset, since there'd be nothing to distinguish "genuinely zero" from "didn't really fetch".
     if (!env.TARKTEE_API_KEY) return;
-    const hazards = await fetchAllHazards(env.TARKTEE_API_KEY);
-    changedHazards = await upsertHazardsAndGetChanged(env.DB, hazards);
+    const { records, perFeed } = await fetchAllHazards(env.TARKTEE_API_KEY);
+    changedHazards = await upsertHazardsAndGetChanged(env.DB, records);
+    return { changed: changedHazards.length, perFeed };
   });
 
   outcomes.restrictions = await runStep(env, "restrictions", async () => {
     const restrictions = await fetchRestrictions();
     changedRestrictions = await upsertRestrictions(env.DB, env.AI, restrictions);
+    return { total: restrictions.length, changed: changedRestrictions.length };
   });
 
   outcomes.detours = await runStep(env, "detours", async () => {
     const detours = await fetchDetours();
     await upsertDetours(env.DB, detours);
+    return { total: detours.length };
   });
 
   outcomes.vms = await runStep(env, "vms", async () => {
     const signs = await fetchVmsSigns();
     await upsertVmsSigns(env.DB, signs);
+    return { total: signs.length };
   });
 
   // Last step, deliberately — see MAX_PUSH_SENDS_PER_CYCLE.
@@ -142,17 +161,22 @@ async function pollFast(env: Env): Promise<void> {
       : null;
     const budget: PushBudget = { remaining: MAX_PUSH_SENDS_PER_CYCLE };
     await notifyMatchingSavedPoints(env.DB, vapidKeys, changedHazards, changedRestrictions, budget);
+    // budget.remaining is decremented per actual send (see notify.ts) — the difference from
+    // the starting allowance is how many pushes this cycle actually sent, without needing to
+    // change notifyMatchingSavedPoints's own signature just to report a count.
+    return { sent: MAX_PUSH_SENDS_PER_CYCLE - budget.remaining };
   });
 
   await persistCycleSummary(env, "pollFast", outcomes);
 }
 
 async function pollSlow(env: Env): Promise<void> {
-  const outcomes: Record<string, { ok: boolean; error?: string }> = {};
+  const outcomes: Record<string, StepOutcome> = {};
 
   outcomes.cameras = await runStep(env, "cameras", async () => {
     const cameras = await fetchCamerasMetadata();
     await upsertCameras(env.DB, cameras);
+    return { total: cameras.length };
   });
 
   await persistCycleSummary(env, "pollSlow", outcomes);

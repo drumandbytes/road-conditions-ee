@@ -208,6 +208,21 @@ export async function fetchHazards(
   return { records, situationCount: data.situation?.length ?? 0, skipped };
 }
 
+export interface HazardFeedSummary {
+  situations: number;
+  usable: number;
+  skipped?: Array<{ reason: string; raw: string }>;
+  error?: string;
+}
+
+export interface HazardPollResult {
+  records: HazardRecord[];
+  // Per-feed breakdown, keyed by HazardEventType — kept alongside `records` (not just logged)
+  // so the caller can persist it to R2 for long-term overview (situations/usable trends per
+  // feed, how often a given endpoint errors), not only console output's ~14-day retention.
+  perFeed: Record<string, HazardFeedSummary>;
+}
+
 // allSettled, not all — the 7 SRTI endpoints are independent feeds (confirmed in production:
 // animalObstacle alone returning a 502 from Tark Tee's own gateway was silently discarding the
 // other 6 endpoints' real data every single poll, via Promise.all's all-or-nothing rejection,
@@ -217,29 +232,33 @@ export async function fetchHazards(
 // Logs exactly once per poll cycle (one combined structured line covering all 7 feeds) rather
 // than once per feed — Workers Logs bills/counts per log event, and 7+ separate lines every 3
 // minutes adds up fast for no benefit over one line with the same information.
-export async function fetchAllHazards(apiKey: string | undefined): Promise<HazardRecord[]> {
+export async function fetchAllHazards(apiKey: string | undefined): Promise<HazardPollResult> {
   const eventTypes = Object.keys(SRTI_ENDPOINTS) as HazardEventType[];
   const results = await Promise.allSettled(eventTypes.map((type) => fetchHazards(apiKey, type)));
   const records: HazardRecord[] = [];
-  const summary: Record<string, unknown> = {};
+  const perFeed: Record<string, HazardFeedSummary> = {};
   let hasIssue = false;
   for (let i = 0; i < results.length; i++) {
     const result = results[i];
     const eventType = eventTypes[i];
     if (result.status === "fulfilled") {
       records.push(...result.value.records);
-      summary[eventType] = {
+      perFeed[eventType] = {
         situations: result.value.situationCount,
         usable: result.value.records.length,
         ...(result.value.skipped.length > 0 && { skipped: result.value.skipped }),
       };
       if (result.value.skipped.length > 0) hasIssue = true;
     } else {
-      summary[eventType] = { error: result.reason instanceof Error ? result.reason.message : String(result.reason) };
+      perFeed[eventType] = {
+        situations: 0,
+        usable: 0,
+        error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+      };
       hasIssue = true;
     }
   }
   const log = hasIssue ? console.error : console.log;
-  log("[ingest-worker] hazard poll:", JSON.stringify(summary));
-  return records;
+  log("[ingest-worker] hazard poll:", JSON.stringify(perFeed));
+  return { records, perFeed };
 }
