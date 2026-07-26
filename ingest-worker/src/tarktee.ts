@@ -158,16 +158,29 @@ export async function fetchHazards(
   const data = (await res.json()) as DatexSrtiResponse;
   const records: HazardRecord[] = [];
   for (const situation of data.situation ?? []) {
+    // TEMPORARY diagnostic — real DATEX II SRTI payloads only started arriving once the API
+    // key was approved, so this interface's field names/shapes are still an unverified guess
+    // (see this function's other comments). Remove once at least one real payload has been
+    // confirmed to parse correctly end-to-end.
+    if (!situation.situationRecord || situation.situationRecord.length === 0) {
+      console.log(`[ingest-worker] hazard feed "${eventType}": situation had no situationRecord —`, JSON.stringify(situation));
+    }
     for (const record of situation.situationRecord ?? []) {
       const loc = record.groupOfLocations?.locationForDisplay;
-      if (!loc || loc.latitude === undefined || loc.longitude === undefined) continue;
+      if (!loc || loc.latitude === undefined || loc.longitude === undefined) {
+        console.log(`[ingest-worker] hazard feed "${eventType}": record skipped, no usable location —`, JSON.stringify(record));
+        continue;
+      }
       // externalId is a NOT NULL primary key in D1 — record.id/situation.id are typed as
       // required strings, but that's unverified against a real payload (see this interface's
       // own comment above), so a runtime-missing id must be skipped here rather than reaching
       // db.ts as `undefined` and failing the entire batch write for every hazard type fetched
       // this cycle, not just this one record.
       const externalId = record.id ?? situation.id;
-      if (!externalId) continue;
+      if (!externalId) {
+        console.log(`[ingest-worker] hazard feed "${eventType}": record skipped, no usable id —`, JSON.stringify(record));
+        continue;
+      }
       const commentValues = record.generalPublicComment?.[0]?.comment?.values ?? [];
       const description = commentValues.find((v) => v.lang === "et")?.value ?? commentValues[0]?.value ?? null;
       records.push({
