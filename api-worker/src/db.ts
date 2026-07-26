@@ -152,6 +152,7 @@ export interface UserRow {
   stripe_customer_id: string | null;
   subscription_status: string;
   bearer_token: string | null;
+  is_admin: number;
 }
 
 export interface SavedPointRow {

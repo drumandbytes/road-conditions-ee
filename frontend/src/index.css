@@ -1150,6 +1150,15 @@ body,
   color: var(--color-text);
 }
 
+/* .account-button is a <button> everywhere else; this one is an <a> (a real navigation to
+   /admin/, not a click handler) so it needs the display/text-decoration a button gets for
+   free. */
+.account-admin-link {
+  display: inline-block;
+  text-decoration: none;
+  margin-bottom: 0.75rem;
+}
+
 .account-button-secondary:hover:not(:disabled) {
   background: var(--color-border);
 }

@@ -33,6 +33,7 @@ interface AccountPanelProps {
       activeBody: string;
       lifetimeBody: string;
       manageButton: string;
+      adminPanelButton: string;
       error: string;
       signedInAs: string;
       productUpdatesOptInLabel: string;
@@ -149,6 +150,12 @@ export function AccountPanel({ t, savedPointsRefreshKey, onAddSavedPoint }: Acco
         <p class="account-email">
           {t.account.signedInAs} <strong>{state.account.email}</strong>
         </p>
+      )}
+
+      {(state.status === "active" || state.status === "lifetime") && state.account.isAdmin && (
+        <a href="/admin/" class="account-button account-button-secondary account-admin-link">
+          {t.account.adminPanelButton}
+        </a>
       )}
 
       {state.status === "loading" && <div class="account-skeleton" aria-hidden="true" />}

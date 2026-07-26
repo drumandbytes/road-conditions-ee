@@ -159,6 +159,7 @@
     "activeBody": "Live camera images, live sign speed limits & warnings, weather station history, and saved locations with push alerts are unlocked.",
     "lifetimeBody": "Live camera images, live sign speed limits & warnings, weather station history, and saved locations with push alerts are unlocked, for good.",
     "manageButton": "Manage subscription",
+    "adminPanelButton": "Admin panel",
     "error": "Something went wrong. Try again in a moment.",
     "signedInAs": "Signed in as",
     "comparisonToggle": "Compare free vs. paid",

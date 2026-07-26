@@ -108,6 +108,7 @@ export async function fetchWeatherStationHistory(stationName: string): Promise<R
 export interface AccountStatus {
   email: string | null;
   subscriptionStatus: string;
+  isAdmin: boolean;
 }
 
 /** Returns null for both "not authenticated" and "authenticated but not active" — callers

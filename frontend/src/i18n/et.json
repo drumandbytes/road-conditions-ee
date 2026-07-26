@@ -159,6 +159,7 @@
     "activeBody": "Otsepildid kaameratest, liiklusmärkide reaalajas kiiruspiirangud ja hoiatused, ilmajaamade ajalugu ning salvestatud asukohad koos push-teavitustega on avatud.",
     "lifetimeBody": "Otsepildid kaameratest, liiklusmärkide reaalajas kiiruspiirangud ja hoiatused, ilmajaamade ajalugu ning salvestatud asukohad koos push-teavitustega on jäädavalt avatud.",
     "manageButton": "Halda tellimust",
+    "adminPanelButton": "Halduspaneel",
     "error": "Midagi läks valesti. Proovi hetke pärast uuesti.",
     "signedInAs": "Sisse logitud kui",
     "comparisonToggle": "Võrdle tasuta ja tasulist",

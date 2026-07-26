@@ -10,7 +10,12 @@ CREATE TABLE users (
                                           -- customer.subscription.* webhook can ever downgrade
                                           -- them automatically.
   bearer_token TEXT UNIQUE,                -- opaque, random; sent as Authorization: Bearer
-  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  -- Grants the "Admin panel" link in AccountPanel — like subscription_status='lifetime', set
+  -- manually via a direct row update, never self-serve. Purely a UI convenience: /admin itself
+  -- is gated by Cloudflare Access (GitHub org membership), not by this column, so this can't
+  -- grant real access on its own.
+  is_admin INTEGER NOT NULL DEFAULT 0
 );
 -- SQLite allows multiple NULLs through a UNIQUE index (only non-NULL values are compared),
 -- so this doesn't block rows that haven't gone through Stripe yet. Required for the

@@ -112,6 +112,7 @@ interface InfoPanelProps {
       activeBody: string;
       lifetimeBody: string;
       manageButton: string;
+      adminPanelButton: string;
       error: string;
       signedInAs: string;
       productUpdatesOptInLabel: string;

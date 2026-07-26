@@ -95,6 +95,7 @@ describe("handleVms", () => {
   };
   const vmsUser: UserRow = {
     id: "u1", email: "a@b.com", stripe_customer_id: "cus_1", subscription_status: "active", bearer_token: "tok",
+    is_admin: 0,
   };
 
   it("returns location + road context only for a free/unauthenticated caller, no live content", async () => {
@@ -148,6 +149,7 @@ describe("handleCameraImage", () => {
     stripe_customer_id: null,
     subscription_status: "active",
     bearer_token: "tok",
+    is_admin: 0,
   };
 
   afterEach(() => {
@@ -211,6 +213,7 @@ describe("handleWeatherStationHistory", () => {
     stripe_customer_id: null,
     subscription_status: "active",
     bearer_token: "tok",
+    is_admin: 0,
   };
 
   it("returns 402 when there is no authenticated paid user", async () => {
@@ -348,6 +351,7 @@ describe("upsertUserFromStripe", () => {
       stripe_customer_id: "cus_1",
       subscription_status: "active",
       bearer_token: "generated-token",
+      is_admin: 0,
     };
     const { db, calls } = fakeDbCapturing(returningRow);
 
@@ -516,6 +520,7 @@ describe("handlePortal", () => {
     stripe_customer_id: "cus_1",
     subscription_status: "active",
     bearer_token: "tok",
+    is_admin: 0,
   };
 
   it("returns 402 when there is no authenticated user", async () => {
@@ -844,6 +849,7 @@ const PAID_USER: UserRow = {
   stripe_customer_id: "cus_1",
   subscription_status: "active",
   bearer_token: "tok",
+  is_admin: 0,
 };
 
 describe("handleListSavedPoints", () => {

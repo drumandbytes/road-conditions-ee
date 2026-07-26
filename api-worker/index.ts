@@ -124,7 +124,11 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (method === "GET" && pathname === "/api/me") {
     const user = await authenticatePaidUser(env.DB, request);
     return user
-      ? Response.json({ email: user.email, subscriptionStatus: user.subscription_status })
+      ? Response.json({
+          email: user.email,
+          subscriptionStatus: user.subscription_status,
+          isAdmin: user.is_admin === 1,
+        })
       : Response.json({ error: "Not authenticated" }, { status: 401 });
   }
   if (method === "POST" && pathname === "/api/portal") {
