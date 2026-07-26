@@ -1,3 +1,13 @@
+/* index.css sets html/body to height:100%+overflow:hidden for the main map app, which has no
+   top-level scrolling content of its own (see that file's own comment). This bundle is a
+   normal, taller-than-viewport document instead, so it needs the page itself to scroll —
+   safe to override unconditionally here since admin.css only loads on this bundle. */
+html,
+body {
+  height: auto;
+  overflow: auto;
+}
+
 .admin-app {
   max-width: 1040px;
   margin: 0 auto;
