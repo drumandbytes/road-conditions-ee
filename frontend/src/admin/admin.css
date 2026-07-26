@@ -94,13 +94,9 @@ body {
   --card-accent: var(--color-accent);
 }
 
-/* A single card holding several small label:value rows (e.g. user status breakdown) instead
-   of one big number — for a set of counts that are really sub-parts of one whole, rather than
-   independent metrics that each deserve their own full stat card. */
-.admin-breakdown-card {
-  justify-content: center;
-}
-
+/* A breakdown of a stat card's own headline number (e.g. Active hazards by type, Total users by
+   status) nested inside that same card — as opposed to a floating list elsewhere on the page,
+   which reads as disconnected from the number it explains. */
 .admin-breakdown-list {
   list-style: none;
   margin: 0;
@@ -108,6 +104,12 @@ body {
   display: flex;
   flex-direction: column;
   gap: 0.45rem;
+}
+
+.admin-breakdown-list--nested {
+  margin-top: 0.7rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--color-border);
 }
 
 .admin-breakdown-list li {
@@ -172,22 +174,6 @@ body {
   border-radius: 50%;
   background: var(--card-accent);
   flex-shrink: 0;
-}
-
-.admin-hazard-breakdown {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem 1.25rem;
-  margin-top: 0.85rem;
-  padding: 0;
-  list-style: none;
-  font-size: 0.85rem;
-  color: var(--color-text-secondary);
-}
-
-.admin-hazard-breakdown strong {
-  color: var(--color-text);
-  font-variant-numeric: tabular-nums;
 }
 
 .admin-table-rowcounts {

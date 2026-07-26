@@ -142,9 +142,7 @@ export function AdminApp() {
               <div class="admin-stat-card">
                 <span class="admin-stat-value">{totalUsers}</span>
                 <span class="admin-stat-label">Total users</span>
-              </div>
-              <div class="admin-stat-card admin-breakdown-card">
-                <ul class="admin-breakdown-list">
+                <ul class="admin-breakdown-list admin-breakdown-list--nested">
                   {(["free", "active", "canceled", "lifetime"] as const).map((status) => (
                     <li key={status}>
                       <span class={`admin-breakdown-dot admin-breakdown-dot--${STATUS_CARD_VARIANT[status]}`} />
@@ -165,6 +163,16 @@ export function AdminApp() {
               <div class="admin-stat-card admin-stat-card--danger">
                 <span class="admin-stat-value">{activeHazardsTotal}</span>
                 <span class="admin-stat-label">Active hazards</span>
+                {Object.keys(stats.activeHazardsByType).length > 0 && (
+                  <ul class="admin-breakdown-list admin-breakdown-list--nested">
+                    {Object.entries(stats.activeHazardsByType).map(([type, count]) => (
+                      <li key={type}>
+                        <span class="admin-breakdown-label">{HAZARD_TYPE_LABELS[type] ?? type}</span>
+                        <span class="admin-breakdown-value">{count}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
               <div class="admin-stat-card admin-stat-card--gold">
                 <span class="admin-stat-value">{stats.totalRestrictions}</span>
@@ -183,15 +191,6 @@ export function AdminApp() {
                 <span class="admin-stat-label">VMS signs</span>
               </div>
             </div>
-            {Object.keys(stats.activeHazardsByType).length > 0 && (
-              <ul class="admin-hazard-breakdown">
-                {Object.entries(stats.activeHazardsByType).map(([type, count]) => (
-                  <li key={type}>
-                    {HAZARD_TYPE_LABELS[type] ?? type}: <strong>{count}</strong>
-                  </li>
-                ))}
-              </ul>
-            )}
           </>
         )}
       </section>
