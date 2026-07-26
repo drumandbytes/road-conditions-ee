@@ -137,39 +137,31 @@ export function AdminApp() {
         {statsError && <p class="admin-error">Failed to load stats.</p>}
         {!statsError && !stats && <p class="admin-muted">Loading…</p>}
         {stats && (
-          <div class="admin-stat-grid">
-            <div class="admin-stat-card">
-              <span class="admin-stat-value">{totalUsers}</span>
-              <span class="admin-stat-label">Total users</span>
-            </div>
-            <div class="admin-stat-card admin-breakdown-card">
-              <ul class="admin-breakdown-list">
-                {(["free", "active", "canceled", "lifetime"] as const).map((status) => (
-                  <li key={status}>
-                    <span class={`admin-breakdown-dot admin-breakdown-dot--${STATUS_CARD_VARIANT[status]}`} />
-                    <span class="admin-breakdown-label">{STATUS_LABELS[status]}</span>
-                    <span class="admin-breakdown-value">{stats.usersByStatus[status] ?? 0}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div class="admin-stat-card admin-stat-card--accent">
-              <span class="admin-stat-value">{stats.totalSavedPoints}</span>
-              <span class="admin-stat-label">Saved locations</span>
-            </div>
-            <div class="admin-stat-card admin-stat-card--accent">
-              <span class="admin-stat-value">{stats.totalPushSubscriptions}</span>
-              <span class="admin-stat-label">Push subscriptions</span>
-            </div>
-          </div>
-        )}
-      </section>
-
-      <section>
-        <h2>Live data</h2>
-        {stats && (
           <>
             <div class="admin-stat-grid">
+              <div class="admin-stat-card">
+                <span class="admin-stat-value">{totalUsers}</span>
+                <span class="admin-stat-label">Total users</span>
+              </div>
+              <div class="admin-stat-card admin-breakdown-card">
+                <ul class="admin-breakdown-list">
+                  {(["free", "active", "canceled", "lifetime"] as const).map((status) => (
+                    <li key={status}>
+                      <span class={`admin-breakdown-dot admin-breakdown-dot--${STATUS_CARD_VARIANT[status]}`} />
+                      <span class="admin-breakdown-label">{STATUS_LABELS[status]}</span>
+                      <span class="admin-breakdown-value">{stats.usersByStatus[status] ?? 0}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div class="admin-stat-card admin-stat-card--accent">
+                <span class="admin-stat-value">{stats.totalSavedPoints}</span>
+                <span class="admin-stat-label">Saved locations</span>
+              </div>
+              <div class="admin-stat-card admin-stat-card--accent">
+                <span class="admin-stat-value">{stats.totalPushSubscriptions}</span>
+                <span class="admin-stat-label">Push subscriptions</span>
+              </div>
               <div class="admin-stat-card admin-stat-card--danger">
                 <span class="admin-stat-value">{activeHazardsTotal}</span>
                 <span class="admin-stat-label">Active hazards</span>
