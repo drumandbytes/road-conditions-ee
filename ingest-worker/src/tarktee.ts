@@ -113,19 +113,20 @@ export interface HazardRecord {
   rawJson: string;
 }
 
-// NOTE: this shape is a provisional best-guess based on the DATEX II 3.6 SRTI standard
-// (MultilingualString value/lang pairs, situationRecord/groupOfLocations conventions) — we
-// have NOT yet seen a real populated hazard payload (the one live response reachable during
-// Phase 0 had an empty situation[] array, no active events at the time). Verify and adjust
-// this parsing against a real non-empty response once the API key is approved (Phase 0 item
-// 5, still pending manual Transpordiamet review) — do not assume this is correct as-is.
+// Confirmed against a real production payload (a "shortTermRoadWorks" record, 2026-07-26) —
+// the coordinates live at locationReference.pointByCoordinates.pointCoordinates, NOT at
+// groupOfLocations.locationForDisplay as originally guessed from the general DATEX II 3.6 SRTI
+// standard. That wrong guess was silently discarding every real hazard record until fixed; see
+// fetchAllHazards's own comment for the logging that caught it.
 interface DatexSituation {
   id: string;
   situationRecord?: Array<{
     id?: string;
     validity?: { validityTimeSpecification?: { overallStartTime?: string; overallEndTime?: string } };
-    groupOfLocations?: {
-      locationForDisplay?: { latitude?: number; longitude?: number };
+    locationReference?: {
+      pointByCoordinates?: {
+        pointCoordinates?: { latitude?: number; longitude?: number };
+      };
     };
     generalPublicComment?: Array<{ comment?: { values?: Array<{ value?: string; lang?: string }> } }>;
   }>;
@@ -136,6 +137,17 @@ interface DatexSrtiResponse {
   lang: string;
 }
 
+// `skipped` carries the raw JSON of anything dropped by the location/id checks below, surfaced
+// once per poll cycle by fetchAllHazards rather than logged individually per feed. Kept as an
+// ongoing safety net, not just a one-off diagnostic — DatexSituation's location field was
+// wrong for months despite looking reasonable (see its own comment), and the 7 SRTI endpoints
+// cover different DATEX II situation subtypes that could still vary at the edges.
+interface HazardFetchResult {
+  records: HazardRecord[];
+  situationCount: number;
+  skipped: Array<{ reason: string; raw: string }>;
+}
+
 // Requires the DATEX II API key, sent via the X-DATEX-API-KEY header — confirmed from Tark
 // Tee's own "DATEX II Estonian profile" PDF (section 7, "Accessing feeds"). Note this was
 // initially guessed wrong as "X-API-Key" before reading that doc; verify header names against
@@ -143,10 +155,10 @@ interface DatexSrtiResponse {
 export async function fetchHazards(
   apiKey: string | undefined,
   eventType: HazardEventType,
-): Promise<HazardRecord[]> {
+): Promise<HazardFetchResult> {
   if (!apiKey) {
     // No key yet — return empty rather than fail the whole poll cycle over one feed type.
-    return [];
+    return { records: [], situationCount: 0, skipped: [] };
   }
   const url = `${BASE}/datex/${SRTI_ENDPOINTS[eventType]}`;
   const res = await fetch(url, {
@@ -157,28 +169,26 @@ export async function fetchHazards(
   }
   const data = (await res.json()) as DatexSrtiResponse;
   const records: HazardRecord[] = [];
+  const skipped: HazardFetchResult["skipped"] = [];
   for (const situation of data.situation ?? []) {
-    // TEMPORARY diagnostic — real DATEX II SRTI payloads only started arriving once the API
-    // key was approved, so this interface's field names/shapes are still an unverified guess
-    // (see this function's other comments). Remove once at least one real payload has been
-    // confirmed to parse correctly end-to-end.
     if (!situation.situationRecord || situation.situationRecord.length === 0) {
-      console.log(`[ingest-worker] hazard feed "${eventType}": situation had no situationRecord —`, JSON.stringify(situation));
+      skipped.push({ reason: "no-situation-record", raw: JSON.stringify(situation) });
+      continue;
     }
-    for (const record of situation.situationRecord ?? []) {
-      const loc = record.groupOfLocations?.locationForDisplay;
+    for (const record of situation.situationRecord) {
+      const loc = record.locationReference?.pointByCoordinates?.pointCoordinates;
       if (!loc || loc.latitude === undefined || loc.longitude === undefined) {
-        console.log(`[ingest-worker] hazard feed "${eventType}": record skipped, no usable location —`, JSON.stringify(record));
+        skipped.push({ reason: "no-location", raw: JSON.stringify(record) });
         continue;
       }
-      // externalId is a NOT NULL primary key in D1 — record.id/situation.id are typed as
-      // required strings, but that's unverified against a real payload (see this interface's
-      // own comment above), so a runtime-missing id must be skipped here rather than reaching
-      // db.ts as `undefined` and failing the entire batch write for every hazard type fetched
-      // this cycle, not just this one record.
+      // externalId is a NOT NULL primary key in D1. record.id is confirmed present on real
+      // payloads (see this interface's own comment above); situation.id is kept as a fallback
+      // regardless, since a runtime-missing id must be skipped here rather than reaching db.ts
+      // as `undefined` and failing the entire batch write for every hazard type fetched this
+      // cycle, not just this one record.
       const externalId = record.id ?? situation.id;
       if (!externalId) {
-        console.log(`[ingest-worker] hazard feed "${eventType}": record skipped, no usable id —`, JSON.stringify(record));
+        skipped.push({ reason: "no-id", raw: JSON.stringify(record) });
         continue;
       }
       const commentValues = record.generalPublicComment?.[0]?.comment?.values ?? [];
@@ -195,15 +205,7 @@ export async function fetchHazards(
       });
     }
   }
-  // Distinguishes "feed genuinely has nothing right now" from "feed returned situations but our
-  // parsing/filtering dropped them all" (missing lat/lng, missing id) — both look identical from
-  // outside D1 otherwise, and this was the missing piece while diagnosing the animalObstacle 502
-  // incident (see fetchAllHazards's comment): the raw situation count is the only way to tell
-  // them apart without re-fetching Tark Tee's API by hand.
-  console.log(
-    `[ingest-worker] hazard feed "${eventType}": ${data.situation?.length ?? 0} situation(s), ${records.length} usable record(s)`,
-  );
-  return records;
+  return { records, situationCount: data.situation?.length ?? 0, skipped };
 }
 
 // allSettled, not all — the 7 SRTI endpoints are independent feeds (confirmed in production:
@@ -211,17 +213,33 @@ export async function fetchHazards(
 // other 6 endpoints' real data every single poll, via Promise.all's all-or-nothing rejection,
 // leaving the hazards table permanently empty despite most feeds working fine). One endpoint
 // being down is Tark Tee's problem, not a reason to also lose everyone else's hazard data.
+//
+// Logs exactly once per poll cycle (one combined structured line covering all 7 feeds) rather
+// than once per feed — Workers Logs bills/counts per log event, and 7+ separate lines every 3
+// minutes adds up fast for no benefit over one line with the same information.
 export async function fetchAllHazards(apiKey: string | undefined): Promise<HazardRecord[]> {
   const eventTypes = Object.keys(SRTI_ENDPOINTS) as HazardEventType[];
   const results = await Promise.allSettled(eventTypes.map((type) => fetchHazards(apiKey, type)));
   const records: HazardRecord[] = [];
+  const summary: Record<string, unknown> = {};
+  let hasIssue = false;
   for (let i = 0; i < results.length; i++) {
     const result = results[i];
+    const eventType = eventTypes[i];
     if (result.status === "fulfilled") {
-      records.push(...result.value);
+      records.push(...result.value.records);
+      summary[eventType] = {
+        situations: result.value.situationCount,
+        usable: result.value.records.length,
+        ...(result.value.skipped.length > 0 && { skipped: result.value.skipped }),
+      };
+      if (result.value.skipped.length > 0) hasIssue = true;
     } else {
-      console.error(`[ingest-worker] hazard feed "${eventTypes[i]}" failed:`, result.reason);
+      summary[eventType] = { error: result.reason instanceof Error ? result.reason.message : String(result.reason) };
+      hasIssue = true;
     }
   }
+  const log = hasIssue ? console.error : console.log;
+  log("[ingest-worker] hazard poll:", JSON.stringify(summary));
   return records;
 }

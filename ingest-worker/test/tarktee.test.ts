@@ -130,14 +130,52 @@ describe("tarktee.ts", () => {
     expect(headers["X-API-Key"]).toBeUndefined();
   });
 
-  it("returns an empty array without fetching when no API key is set", async () => {
+  it("returns an empty result without fetching when no API key is set", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
 
-    const hazards = await fetchHazards(undefined, "slippery");
+    const result = await fetchHazards(undefined, "slippery");
 
-    expect(hazards).toEqual([]);
+    expect(result).toEqual({ records: [], situationCount: 0, skipped: [] });
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  // Regression test for a real production incident: every hazard record was silently
+  // discarded because this parser looked for coordinates at groupOfLocations.locationForDisplay
+  // (a guess from the general DATEX II 3.6 SRTI standard) while Tark Tee's real payloads put
+  // them at locationReference.pointByCoordinates.pointCoordinates instead — confirmed against
+  // an actual production "shortTermRoadWorks" record (trimmed here to the relevant fields).
+  it("parses a real hazard record's location from locationReference.pointByCoordinates.pointCoordinates", async () => {
+    const fetchMock = mockFetchOnceJson({
+      situation: [
+        {
+          situationRecord: [
+            {
+              id: "11c44ffe-7474-4578-a8ff-39b9765387c9",
+              validity: { validityTimeSpecification: { overallStartTime: "2026-07-26T05:00:00.000Z" } },
+              locationReference: {
+                pointByCoordinates: { pointCoordinates: { latitude: 59.33447, longitude: 24.807602 } },
+              },
+              generalPublicComment: [],
+            },
+          ],
+        },
+      ],
+      lang: "et",
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await fetchHazards("test-key-123", "roadworks");
+
+    expect(result.skipped).toEqual([]);
+    expect(result.records).toEqual([
+      expect.objectContaining({
+        externalId: "11c44ffe-7474-4578-a8ff-39b9765387c9",
+        eventType: "roadworks",
+        lat: 59.33447,
+        lng: 24.807602,
+      }),
+    ]);
   });
 
   // Regression test: externalId is a NOT NULL D1 primary key — a record with neither its own
@@ -151,7 +189,9 @@ describe("tarktee.ts", () => {
           // situation.id itself missing too, not just situationRecord[].id
           situationRecord: [
             {
-              groupOfLocations: { locationForDisplay: { latitude: 59.4, longitude: 24.7 } },
+              locationReference: {
+                pointByCoordinates: { pointCoordinates: { latitude: 59.4, longitude: 24.7 } },
+              },
             },
           ],
         },
@@ -160,9 +200,10 @@ describe("tarktee.ts", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const hazards = await fetchHazards("test-key-123", "slippery");
+    const result = await fetchHazards("test-key-123", "slippery");
 
-    expect(hazards).toEqual([]);
+    expect(result.records).toEqual([]);
+    expect(result.skipped).toEqual([{ reason: "no-id", raw: expect.any(String) }]);
   });
 
   // Regression test for a real production incident: Tark Tee's animalObstacle SRTI endpoint
@@ -185,7 +226,11 @@ describe("tarktee.ts", () => {
               {
                 id: "situation-1",
                 situationRecord: [
-                  { groupOfLocations: { locationForDisplay: { latitude: 59.4, longitude: 24.7 } } },
+                  {
+                    locationReference: {
+                      pointByCoordinates: { pointCoordinates: { latitude: 59.4, longitude: 24.7 } },
+                    },
+                  },
                 ],
               },
             ],
@@ -199,10 +244,13 @@ describe("tarktee.ts", () => {
     const hazards = await fetchAllHazards("test-key-123");
 
     expect(hazards).toEqual([expect.objectContaining({ externalId: "situation-1", eventType: "slippery" })]);
-    expect(errorSpy).toHaveBeenCalledWith(
-      expect.stringContaining('hazard feed "obstacle" failed'),
-      expect.anything(),
-    );
+    // One combined log line for the whole poll cycle, not one per feed — see fetchAllHazards's
+    // own comment on why (Workers Logs counts/bills per event).
+    expect(errorSpy).toHaveBeenCalledTimes(1);
+    const [, summaryJson] = errorSpy.mock.calls[0];
+    const summary = JSON.parse(summaryJson as string);
+    expect(summary.obstacle.error).toContain("502");
+    expect(summary.slippery).toEqual({ situations: 1, usable: 1 });
     errorSpy.mockRestore();
   });
 
