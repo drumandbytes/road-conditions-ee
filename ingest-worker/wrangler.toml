@@ -23,6 +23,13 @@ binding = "DB"
 database_name = "road-conditions"
 database_id = "b4a456a7-c3f3-4a1e-95e5-4a8b7af4deb1"
 
+# Long-term operational log export — same pattern as cloudflare-workers/vault-worker's own
+# LOG_BUCKET, see src/log.ts. A dedicated bucket (not shared with vault-worker's vault-logs)
+# so R2 Data Catalog/R2 SQL querying later stays scoped to this project's own log schema.
+[[r2_buckets]]
+binding = "LOG_BUCKET"
+bucket_name = "road-conditions-logs"
+
 [ai]
 binding = "AI"
 

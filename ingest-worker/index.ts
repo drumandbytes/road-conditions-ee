@@ -10,6 +10,7 @@ import {
   upsertWeatherHistory,
   upsertWeatherReadings,
 } from "./src/db";
+import { log, persistLog } from "./src/log";
 import { notifyMatchingSavedPoints, type PushBudget } from "./src/notify";
 import type { HazardRecord } from "./src/tarktee";
 import { fetchAllHazards, fetchCamerasMetadata } from "./src/tarktee";
@@ -24,6 +25,9 @@ interface Env {
   // Real secret, set via `wrangler secret put VAPID_PRIVATE_KEY` — absent until that's done,
   // in which case push sending is skipped entirely (see notify.ts).
   VAPID_PRIVATE_KEY?: string;
+  // Long-term operational log export, mirroring cloudflare-workers/vault-worker's own
+  // LOG_BUCKET — see src/log.ts.
+  LOG_BUCKET: R2Bucket;
 }
 
 const WEATHER_HISTORY_RETENTION_DAYS = 7;
@@ -53,12 +57,31 @@ export default {
 // error) must not prevent the others from running. Confirmed this was a real bug, not a
 // theoretical one: an empty-array crash in the cameras upsert silently killed hazard
 // ingestion too, because everything shared one unguarded async function body.
-async function runStep(name: string, step: () => Promise<void>): Promise<void> {
+//
+// Returns the step's outcome (rather than void) so the caller can fold it into one persisted
+// per-cycle summary — see pollFast/pollSlow — instead of a separate R2 write per step.
+async function runStep(env: Env, name: string, step: () => Promise<void>): Promise<{ ok: boolean; error?: string }> {
   try {
     await step();
+    return { ok: true };
   } catch (err) {
-    console.error(`[ingest-worker] step "${name}" failed:`, err instanceof Error ? err.stack : err);
+    const message = err instanceof Error ? err.stack ?? err.message : String(err);
+    console.error(`[ingest-worker] step "${name}" failed:`, message);
+    return { ok: false, error: message };
   }
+}
+
+// One persisted event per poll cycle (not one per step) for the same reason tarktee.ts's
+// fetchAllHazards consolidated its own per-feed logging — R2 also charges per write operation,
+// and a cycle's worth of step outcomes fits comfortably in a single object.
+async function persistCycleSummary(
+  env: Env,
+  cycle: "pollFast" | "pollSlow",
+  outcomes: Record<string, { ok: boolean; error?: string }>,
+): Promise<void> {
+  const hasFailure = Object.values(outcomes).some((o) => !o.ok);
+  const entry = log(hasFailure ? "WARN" : "INFO", cycle, { steps: outcomes });
+  await persistLog(env.LOG_BUCKET, entry);
 }
 
 // How many Web Push sends notifyMatchingSavedPoints is willing to make in one poll cycle —
@@ -74,8 +97,9 @@ const MAX_PUSH_SENDS_PER_CYCLE = 15;
 async function pollFast(env: Env): Promise<void> {
   let changedHazards: HazardRecord[] = [];
   let changedRestrictions: Restriction[] = [];
+  const outcomes: Record<string, { ok: boolean; error?: string }> = {};
 
-  await runStep("weatherReadings", async () => {
+  outcomes.weatherReadings = await runStep(env, "weatherReadings", async () => {
     const readings = await fetchWeatherReadings();
     await upsertWeatherReadings(env.DB, readings);
     // Once-per-hour insert (INSERT OR IGNORE, not an upsert) — writing on every 3-min poll was
@@ -85,7 +109,7 @@ async function pollFast(env: Env): Promise<void> {
     await pruneWeatherHistory(env.DB, WEATHER_HISTORY_RETENTION_DAYS);
   });
 
-  await runStep("hazards", async () => {
+  outcomes.hazards = await runStep(env, "hazards", async () => {
     // Skip entirely rather than fetch (which returns [] per feed type until TARKTEE_API_KEY
     // is active — registration pending) — upsertHazardsAndGetChanged treats an empty input as
     // "confirmed zero hazards" and deletes every existing row accordingly. Without this guard,
@@ -96,36 +120,42 @@ async function pollFast(env: Env): Promise<void> {
     changedHazards = await upsertHazardsAndGetChanged(env.DB, hazards);
   });
 
-  await runStep("restrictions", async () => {
+  outcomes.restrictions = await runStep(env, "restrictions", async () => {
     const restrictions = await fetchRestrictions();
     changedRestrictions = await upsertRestrictions(env.DB, env.AI, restrictions);
   });
 
-  await runStep("detours", async () => {
+  outcomes.detours = await runStep(env, "detours", async () => {
     const detours = await fetchDetours();
     await upsertDetours(env.DB, detours);
   });
 
-  await runStep("vms", async () => {
+  outcomes.vms = await runStep(env, "vms", async () => {
     const signs = await fetchVmsSigns();
     await upsertVmsSigns(env.DB, signs);
   });
 
   // Last step, deliberately — see MAX_PUSH_SENDS_PER_CYCLE.
-  await runStep("pushNotifications", async () => {
+  outcomes.pushNotifications = await runStep(env, "pushNotifications", async () => {
     const vapidKeys = env.VAPID_PRIVATE_KEY
       ? { publicKey: env.VAPID_PUBLIC_KEY, privateKey: env.VAPID_PRIVATE_KEY }
       : null;
     const budget: PushBudget = { remaining: MAX_PUSH_SENDS_PER_CYCLE };
     await notifyMatchingSavedPoints(env.DB, vapidKeys, changedHazards, changedRestrictions, budget);
   });
+
+  await persistCycleSummary(env, "pollFast", outcomes);
 }
 
 async function pollSlow(env: Env): Promise<void> {
-  await runStep("cameras", async () => {
+  const outcomes: Record<string, { ok: boolean; error?: string }> = {};
+
+  outcomes.cameras = await runStep(env, "cameras", async () => {
     const cameras = await fetchCamerasMetadata();
     await upsertCameras(env.DB, cameras);
   });
+
+  await persistCycleSummary(env, "pollSlow", outcomes);
 }
 
 // Truncated to the hour, UTC — matches the granularity weather_station_history stores at
