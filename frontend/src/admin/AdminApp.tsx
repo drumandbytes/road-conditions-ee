@@ -106,6 +106,7 @@ export function AdminApp() {
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   const activeHazardsTotal = stats ? Object.values(stats.activeHazardsByType).reduce((sum, n) => sum + n, 0) : 0;
+  const totalUsers = stats ? Object.values(stats.usersByStatus).reduce((sum, n) => sum + n, 0) : 0;
   const sortedTables = db ? Object.entries(db.tableRowCounts).sort(([, a], [, b]) => b - a) : [];
 
   return (
@@ -118,6 +119,10 @@ export function AdminApp() {
         {!statsError && !stats && <p class="admin-muted">Loading…</p>}
         {stats && (
           <div class="admin-stat-grid">
+            <div class="admin-stat-card">
+              <span class="admin-stat-value">{totalUsers}</span>
+              <span class="admin-stat-label">Total users</span>
+            </div>
             {(["free", "active", "canceled", "lifetime"] as const).map((status) => (
               <div class={`admin-stat-card admin-stat-card--${STATUS_CARD_VARIANT[status]}`} key={status}>
                 <span class="admin-stat-value">{stats.usersByStatus[status] ?? 0}</span>
