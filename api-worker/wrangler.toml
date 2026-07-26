@@ -41,6 +41,13 @@ namespace_id = "1002"
 [[send_email]]
 name = "EMAIL"
 
+[vars]
+# The "roadconditions-admin" Access application's own Application Audience (AUD) tag — not a
+# secret, just an identifier scoping JWT verification to this specific application (see
+# src/access.ts). Cloudflare Zero Trust → Access → Applications → roadconditions-admin →
+# Overview.
+ACCESS_AUD = "d69668cfbf997ab5f11f2911217b75853003ce699dc3cba7363d9296f20bd6c4"
+
 [[routes]]
 pattern = "api.drumandbytes.ee"
 custom_domain = true
