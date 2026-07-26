@@ -182,6 +182,14 @@ export async function fetchHazards(
       });
     }
   }
+  // Distinguishes "feed genuinely has nothing right now" from "feed returned situations but our
+  // parsing/filtering dropped them all" (missing lat/lng, missing id) — both look identical from
+  // outside D1 otherwise, and this was the missing piece while diagnosing the animalObstacle 502
+  // incident (see fetchAllHazards's comment): the raw situation count is the only way to tell
+  // them apart without re-fetching Tark Tee's API by hand.
+  console.log(
+    `[ingest-worker] hazard feed "${eventType}": ${data.situation?.length ?? 0} situation(s), ${records.length} usable record(s)`,
+  );
   return records;
 }
 
