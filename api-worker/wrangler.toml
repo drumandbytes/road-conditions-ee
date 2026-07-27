@@ -47,6 +47,9 @@ name = "EMAIL"
 # src/access.ts). Cloudflare Zero Trust → Access → Applications → roadconditions-admin →
 # Overview.
 ACCESS_AUD = "d69668cfbf997ab5f11f2911217b75853003ce699dc3cba7363d9296f20bd6c4"
+# Not secret — needed only to build the R2 SQL HTTP API's URL path. The actual credential is
+# R2_SQL_TOKEN, set via `wrangler secret put` (see src/r2sql.ts).
+CLOUDFLARE_ACCOUNT_ID = "0ec5fc1b99d7ba6baa1b261591b1b49e"
 
 [[routes]]
 pattern = "api.drumandbytes.ee"

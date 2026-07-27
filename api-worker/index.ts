@@ -2,6 +2,7 @@ import { verifyAccessJwt } from "./src/access";
 import { authenticatePaidUser, authenticateUser } from "./src/auth";
 import { handleDeleteAccount } from "./src/routes/account";
 import { handleAdminDb, handleAdminStats, handleAdminUsers } from "./src/routes/admin";
+import { handleAdminTrends } from "./src/routes/admin-trends";
 import { corsHeaders, handlePreflight, isAllowedOrigin } from "./src/cors";
 import { handleCameraImage, handleCameras } from "./src/routes/cameras";
 import { handleCheckout, handleCheckoutSession, handlePortal } from "./src/routes/checkout";
@@ -30,6 +31,9 @@ interface Env {
   // secret, just an identifier scoping JWT verification to this specific application. See
   // src/access.ts.
   ACCESS_AUD?: string;
+  // R2 SQL access for the admin trends endpoint — see src/r2sql.ts and src/routes/admin-trends.ts.
+  CLOUDFLARE_ACCOUNT_ID?: string;
+  R2_SQL_TOKEN?: string;
 }
 
 export default {
@@ -188,6 +192,18 @@ async function route(request: Request, env: Env): Promise<Response> {
     const email = await verifyAccessJwt(request, env.ACCESS_AUD);
     if (!email) return Response.json({ error: "Not authorized" }, { status: 401 });
     return handleAdminDb(env.DB);
+  }
+  if (method === "GET" && pathname === "/api/admin/trends") {
+    const email = await verifyAccessJwt(request, env.ACCESS_AUD);
+    if (!email) return Response.json({ error: "Not authorized" }, { status: 401 });
+    if (!env.CLOUDFLARE_ACCOUNT_ID || !env.R2_SQL_TOKEN) {
+      return Response.json({ error: "R2 SQL not configured" }, { status: 500 });
+    }
+    return handleAdminTrends({
+      accountId: env.CLOUDFLARE_ACCOUNT_ID,
+      token: env.R2_SQL_TOKEN,
+      bucket: "road-conditions-logs",
+    });
   }
 
   return Response.json({ error: "Not found" }, { status: 404 });
