@@ -62,3 +62,20 @@ export async function getAdminDb(): Promise<AdminDbOverview> {
   if (!res.ok) throw new Error(`Failed to load db overview (${res.status})`);
   return res.json();
 }
+
+// `day` plus one number per hazard type — see api-worker's admin-trends.ts for why this can't
+// be a stricter type (a nominal interface can't express "this one key is a string, the rest
+// are numbers").
+export type HazardCountsByDay = Record<string, string | number>;
+
+export interface AdminTrends {
+  hazardsByDay: HazardCountsByDay[];
+  cycleHealthByDay: Array<{ day: string; infoCount: number; issueCount: number }>;
+  feedErrorsByDay: HazardCountsByDay[];
+}
+
+export async function getAdminTrends(): Promise<AdminTrends> {
+  const res = await adminFetch("/api/admin/trends");
+  if (!res.ok) throw new Error(`Failed to load trends (${res.status})`);
+  return res.json();
+}

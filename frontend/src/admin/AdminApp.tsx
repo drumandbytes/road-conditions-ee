@@ -1,6 +1,8 @@
 import { useEffect, useState } from "preact/hooks";
-import { getAdminDb, getAdminStats, getAdminUsers } from "./api";
-import type { AdminDbOverview, AdminStats, AdminUser } from "./api";
+import { getAdminDb, getAdminStats, getAdminTrends, getAdminUsers } from "./api";
+import type { AdminDbOverview, AdminStats, AdminTrends, AdminUser } from "./api";
+import { StackedBarChart } from "./StackedBarChart";
+import type { ChartSeries } from "./StackedBarChart";
 
 const STATUS_LABELS: Record<string, string> = {
   free: "Free",
@@ -35,6 +37,30 @@ const HAZARD_TYPE_LABELS: Record<string, string> = {
   blockage: "Blockage",
   weather: "Severe weather",
 };
+
+// A categorical palette distinct from the semantic status/accent colors used elsewhere on the
+// page (those mean "good/bad/neutral"; these seven just need to stay visually distinct from
+// each other across two different charts that both break hazards down by type).
+const HAZARD_TYPE_COLORS: Record<string, string> = {
+  slippery: "#4da8ff",
+  obstacle: "#ff6b60",
+  accident: "#e0b23d",
+  roadworks: "#ff9f43",
+  reduced_visibility: "#9b59b6",
+  blockage: "#34c77b",
+  weather: "#64748b",
+};
+
+const HAZARD_CHART_SERIES: ChartSeries[] = Object.keys(HAZARD_TYPE_LABELS).map((key) => ({
+  key,
+  label: HAZARD_TYPE_LABELS[key],
+  color: HAZARD_TYPE_COLORS[key],
+}));
+
+const CYCLE_HEALTH_SERIES: ChartSeries[] = [
+  { key: "infoCount", label: "OK", color: "var(--color-success)" },
+  { key: "issueCount", label: "Issue", color: "var(--color-danger)" },
+];
 
 const TABLE_LABELS: Record<string, string> = {
   users: "Users",
@@ -88,6 +114,8 @@ export function AdminApp() {
   const [statsError, setStatsError] = useState(false);
   const [db, setDb] = useState<AdminDbOverview | null>(null);
   const [dbError, setDbError] = useState(false);
+  const [trends, setTrends] = useState<AdminTrends | null>(null);
+  const [trendsError, setTrendsError] = useState(false);
   const [users, setUsers] = useState<AdminUser[] | null>(null);
   const [usersError, setUsersError] = useState(false);
   const [page, setPage] = useState(1);
@@ -104,6 +132,12 @@ export function AdminApp() {
     getAdminDb()
       .then(setDb)
       .catch(() => setDbError(true));
+  }, []);
+
+  useEffect(() => {
+    getAdminTrends()
+      .then(setTrends)
+      .catch(() => setTrendsError(true));
   }, []);
 
   useEffect(() => {
@@ -216,6 +250,28 @@ export function AdminApp() {
               ))}
             </ul>
           </>
+        )}
+      </section>
+
+      <section>
+        <h2>Trends</h2>
+        {trendsError && <p class="admin-error">Failed to load trends.</p>}
+        {!trendsError && !trends && <p class="admin-muted">Loading…</p>}
+        {trends && (
+          <div class="admin-chart-grid">
+            <div>
+              <h3 class="admin-chart-title">Active hazards by day</h3>
+              <StackedBarChart data={trends.hazardsByDay} series={HAZARD_CHART_SERIES} />
+            </div>
+            <div>
+              <h3 class="admin-chart-title">Cycle health by day</h3>
+              <StackedBarChart data={trends.cycleHealthByDay} series={CYCLE_HEALTH_SERIES} />
+            </div>
+            <div>
+              <h3 class="admin-chart-title">Hazard feed errors by day</h3>
+              <StackedBarChart data={trends.feedErrorsByDay} series={HAZARD_CHART_SERIES} />
+            </div>
+          </div>
         )}
       </section>
 
