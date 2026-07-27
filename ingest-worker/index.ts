@@ -11,7 +11,7 @@ import {
   upsertWeatherHistory,
   upsertWeatherReadings,
 } from "./src/db";
-import { log, persistLog, sendToStream } from "./src/log";
+import { log, sendToStream } from "./src/log";
 import { notifyMatchingSavedPoints, type PushBudget } from "./src/notify";
 import type { HazardRecord } from "./src/tarktee";
 import { fetchAllHazards, fetchCamerasMetadata } from "./src/tarktee";
@@ -26,9 +26,7 @@ interface Env {
   // Real secret, set via `wrangler secret put VAPID_PRIVATE_KEY` — absent until that's done,
   // in which case push sending is skipped entirely (see notify.ts).
   VAPID_PRIVATE_KEY?: string;
-  // Long-term operational log export, mirroring cloudflare-workers/vault-worker's own
-  // LOG_BUCKET — see src/log.ts.
-  LOG_BUCKET: R2Bucket;
+  // Long-term operational log export — see src/log.ts.
   LOG_STREAM: Pipeline;
 }
 
@@ -101,11 +99,7 @@ async function persistCycleSummary(
   // erroring would silently stay at INFO instead of surfacing as WARN.
   const hasFailure = Object.values(outcomes).some((o) => !o.ok || o.hasIssue);
   const entry = log(hasFailure ? "WARN" : "INFO", cycle, { steps: outcomes });
-  // Writing to both LOG_BUCKET (raw JSON) and LOG_STREAM (Iceberg table via Pipelines) is
-  // temporary, while the pipeline's end-to-end behavior is being verified — once confirmed,
-  // this should drop back to just sendToStream, since the same data would otherwise be stored
-  // twice for no benefit.
-  await Promise.all([persistLog(env.LOG_BUCKET, entry), sendToStream(env.LOG_STREAM, entry)]);
+  await sendToStream(env.LOG_STREAM, entry);
 }
 
 // How many Web Push sends notifyMatchingSavedPoints is willing to make in one poll cycle —

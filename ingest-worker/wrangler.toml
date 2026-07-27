@@ -23,16 +23,10 @@ binding = "DB"
 database_name = "road-conditions"
 database_id = "b4a456a7-c3f3-4a1e-95e5-4a8b7af4deb1"
 
-# Long-term operational log export — same pattern as cloudflare-workers/vault-worker's own
-# LOG_BUCKET, see src/log.ts. A dedicated bucket (not shared with vault-worker's vault-logs)
-# so R2 Data Catalog/R2 SQL querying later stays scoped to this project's own log schema.
-[[r2_buckets]]
-binding = "LOG_BUCKET"
-bucket_name = "road-conditions-logs"
-
-# Feeds the ingest_worker_logs_pipeline -> ingest_worker_logs_sink -> R2 Data Catalog Iceberg
-# table (ingest_worker.cycle_logs, in the same road-conditions-logs bucket) — see src/log.ts.
-# Created via `wrangler pipelines streams/sinks/create`, not declarable in this file.
+# Long-term operational log export — see src/log.ts. Feeds the ingest_worker_logs_pipeline ->
+# ingest_worker_logs_sink -> R2 Data Catalog Iceberg table (ingest_worker.cycle_logs, in the
+# road-conditions-logs bucket). Created via `wrangler pipelines streams/sinks/create`, not
+# declarable in this file.
 [[pipelines]]
 binding = "LOG_STREAM"
 stream = "ed2f32a41c584bcf813b41543b21b24f"
