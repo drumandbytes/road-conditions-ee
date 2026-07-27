@@ -1,0 +1,8 @@
+{
+  "fields": [
+    { "name": "ts", "type": "timestamp", "required": true },
+    { "name": "level", "type": "string", "required": true },
+    { "name": "event", "type": "string", "required": true },
+    { "name": "steps", "type": "json", "required": false }
+  ]
+}

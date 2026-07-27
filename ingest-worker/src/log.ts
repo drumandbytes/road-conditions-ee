@@ -3,6 +3,8 @@
 // Business/Enterprise plan we're not on) at a key partitioned by day, so the bucket can later
 // have R2 Data Catalog enabled on it and be queried with R2 SQL.
 
+import type { Pipeline } from "cloudflare:pipelines";
+
 export type LogLevel = "INFO" | "WARN" | "ERROR";
 
 export interface LogEntry {
@@ -28,4 +30,12 @@ export async function persistLog(bucket: R2Bucket, entry: LogEntry): Promise<voi
   const ts = entry.ts.replace(/[:.]/g, "-");
   const key = `${date}/${ts}_${entry.event}.json`;
   await bucket.put(key, JSON.stringify(entry), { httpMetadata: { contentType: "application/json" } });
+}
+
+// Feeds the ingest_worker_logs_pipeline -> ingest_worker_logs_sink -> R2 Data Catalog Iceberg
+// table (ingest_worker.cycle_logs), which is queryable with R2 SQL — unlike persistLog's raw
+// JSON objects, this lands the same data as real table rows. Intended to replace persistLog
+// once confirmed working end-to-end (see index.ts's persistCycleSummary).
+export async function sendToStream(stream: Pipeline, entry: LogEntry): Promise<void> {
+  await stream.send([entry]);
 }

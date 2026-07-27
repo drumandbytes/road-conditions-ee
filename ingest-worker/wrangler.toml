@@ -30,6 +30,13 @@ database_id = "b4a456a7-c3f3-4a1e-95e5-4a8b7af4deb1"
 binding = "LOG_BUCKET"
 bucket_name = "road-conditions-logs"
 
+# Feeds the ingest_worker_logs_pipeline -> ingest_worker_logs_sink -> R2 Data Catalog Iceberg
+# table (ingest_worker.cycle_logs, in the same road-conditions-logs bucket) — see src/log.ts.
+# Created via `wrangler pipelines streams/sinks/create`, not declarable in this file.
+[[pipelines]]
+binding = "LOG_STREAM"
+stream = "ed2f32a41c584bcf813b41543b21b24f"
+
 [ai]
 binding = "AI"
 

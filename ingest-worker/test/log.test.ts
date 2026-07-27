@@ -1,5 +1,6 @@
+import type { Pipeline } from "cloudflare:pipelines";
 import { describe, expect, it } from "vitest";
-import { log, persistLog } from "../src/log";
+import { log, persistLog, sendToStream } from "../src/log";
 
 describe("log.ts", () => {
   it("builds a structured entry and returns it", () => {
@@ -29,5 +30,15 @@ describe("log.ts", () => {
     expect(key).toBe("2026-07-26/2026-07-26T11-30-34-941Z_pollFast.json");
     expect(JSON.parse(value)).toEqual({ ts: "2026-07-26T11:30:34.941Z", level: "WARN", event: "pollFast" });
     expect(options).toEqual({ httpMetadata: { contentType: "application/json" } });
+  });
+
+  it("sends the entry to the pipeline stream as a single-element batch", async () => {
+    const sendCalls: unknown[][] = [];
+    const stream = { send: async (records: unknown[]) => { sendCalls.push(records); } } as unknown as Pipeline;
+    const entry = { ts: "2026-07-26T11:30:34.941Z", level: "WARN" as const, event: "pollFast" };
+
+    await sendToStream(stream, entry);
+
+    expect(sendCalls).toEqual([[entry]]);
   });
 });
