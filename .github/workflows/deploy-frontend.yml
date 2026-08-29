@@ -7,6 +7,10 @@ on:
       - 'frontend/**'
       - '.github/workflows/deploy-frontend.yml'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   deploy:
     uses: drumandbytes/reusable-actions/.github/workflows/deploy-cloudflare-pages.yml@v1

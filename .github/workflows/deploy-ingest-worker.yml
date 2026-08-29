@@ -7,6 +7,10 @@ on:
       - 'ingest-worker/**'
       - '.github/workflows/deploy-ingest-worker.yml'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   deploy:
     uses: drumandbytes/reusable-actions/.github/workflows/deploy-cloudflare-worker.yml@v1
