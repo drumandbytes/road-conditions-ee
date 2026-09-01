@@ -16,6 +16,6 @@
   },
   "dependencies": {
     "jose": "^6.2.10",
-    "stripe": "^22.5.0"
+    "stripe": "^22.6.0"
   }
 }
