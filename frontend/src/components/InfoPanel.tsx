@@ -144,6 +144,13 @@ export function InfoPanel({
   onAddSavedPoint,
 }: InfoPanelProps) {
   const [tab, setTab] = useState<Tab>("info");
+  // Mount AccountPanel on the first visit to the account tab and keep it mounted while the
+  // panel stays open — otherwise every info↔account toggle unmounts it and re-fires its
+  // /api/me + /api/subscribe + /api/email-preferences fetches. Resets when the panel closes.
+  const [accountVisited, setAccountVisited] = useState(false);
+  useEffect(() => {
+    if (tab === "account") setAccountVisited(true);
+  }, [tab]);
   const [subview, setSubview] = useState<"none" | "about" | "guide">("none");
   // null = no drag/keyboard resize has happened yet — panel uses its normal CSS (content-hugging
   // up to 85vh). Once set, this pixel value drives the panel's height directly, overriding that
@@ -362,12 +369,14 @@ export function InfoPanel({
                     </>
                   )}
 
-                  {tab === "account" && (
-                    <AccountPanel
-                      t={t}
-                      savedPointsRefreshKey={savedPointsRefreshKey}
-                      onAddSavedPoint={onAddSavedPoint}
-                    />
+                  {accountVisited && (
+                    <div hidden={tab !== "account"}>
+                      <AccountPanel
+                        t={t}
+                        savedPointsRefreshKey={savedPointsRefreshKey}
+                        onAddSavedPoint={onAddSavedPoint}
+                      />
+                    </div>
                   )}
 
                   <button type="button" class="about-link" onClick={() => setSubview("guide")}>

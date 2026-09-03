@@ -4,6 +4,7 @@ import { handleDeleteAccount } from "./src/routes/account";
 import { handleAdminDb, handleAdminStats, handleAdminUsers } from "./src/routes/admin";
 import { handleAdminTrends } from "./src/routes/admin-trends";
 import { corsHeaders, handlePreflight, isAllowedOrigin } from "./src/cors";
+import { withEdgeCache } from "./src/edge-cache";
 import { handleCameraImage, handleCameras } from "./src/routes/cameras";
 import { handleCheckout, handleCheckoutSession, handlePortal } from "./src/routes/checkout";
 import { handleGetEmailPreferences, handleUpdateEmailPreferences } from "./src/routes/email-preferences";
@@ -37,13 +38,13 @@ interface Env {
 }
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const preflight = handlePreflight(request);
     if (preflight) return preflight;
 
     let response: Response;
     try {
-      response = await route(request, env);
+      response = await route(request, env, ctx);
     } catch (err) {
       // Without this, an uncaught exception anywhere in route() skips the CORS-header logic
       // below entirely — the browser then reports an opaque CORS failure instead of surfacing
@@ -61,23 +62,25 @@ export default {
   },
 } satisfies ExportedHandler<Env>;
 
-async function route(request: Request, env: Env): Promise<Response> {
+async function route(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   const url = new URL(request.url);
   const { pathname } = url;
   const { method } = request;
 
-  // Free, cached reads — no auth required.
+  // Free, edge-cached reads — no auth required. TTLs sit just under the ingest cron's refresh
+  // cadence (3 min for weather/hazards/restrictions, 30 min for cameras), so a hit is never
+  // more than one ingest cycle stale.
   if (method === "GET" && pathname === "/api/weather-stations") {
-    return handleWeatherStations(env.DB);
+    return withEdgeCache(request, ctx, 90, () => handleWeatherStations(env.DB));
   }
   if (method === "GET" && pathname === "/api/cameras") {
-    return handleCameras(env.DB);
+    return withEdgeCache(request, ctx, 600, () => handleCameras(env.DB));
   }
   if (method === "GET" && pathname === "/api/hazards") {
-    return handleHazards(env.DB);
+    return withEdgeCache(request, ctx, 90, () => handleHazards(env.DB));
   }
   if (method === "GET" && pathname === "/api/restrictions") {
-    return handleRestrictions(env.DB);
+    return withEdgeCache(request, ctx, 90, () => handleRestrictions(env.DB));
   }
   if (method === "GET" && pathname === "/api/geocode") {
     return handleGeocode(request, env);
@@ -93,7 +96,7 @@ async function route(request: Request, env: Env): Promise<Response> {
   const cameraImageMatch = pathname.match(/^\/api\/cameras\/([^/]+)\/image$/);
   if (method === "GET" && cameraImageMatch) {
     const user = await authenticatePaidUser(env.DB, request);
-    return handleCameraImage(cameraImageMatch[1], user, env.DB);
+    return handleCameraImage(cameraImageMatch[1], user, env.DB, ctx);
   }
   const weatherHistoryMatch = pathname.match(/^\/api\/weather-stations\/([^/]+)\/history$/);
   if (method === "GET" && weatherHistoryMatch) {
@@ -181,7 +184,7 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (method === "GET" && pathname === "/api/admin/stats") {
     const email = await verifyAccessJwt(request, env.ACCESS_AUD);
     if (!email) return Response.json({ error: "Not authorized" }, { status: 401 });
-    return handleAdminStats(env.DB);
+    return withEdgeCache(request, ctx, 120, () => handleAdminStats(env.DB));
   }
   if (method === "GET" && pathname === "/api/admin/users") {
     const email = await verifyAccessJwt(request, env.ACCESS_AUD);
@@ -191,7 +194,7 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (method === "GET" && pathname === "/api/admin/db") {
     const email = await verifyAccessJwt(request, env.ACCESS_AUD);
     if (!email) return Response.json({ error: "Not authorized" }, { status: 401 });
-    return handleAdminDb(env.DB);
+    return withEdgeCache(request, ctx, 120, () => handleAdminDb(env.DB));
   }
   if (method === "GET" && pathname === "/api/admin/trends") {
     const email = await verifyAccessJwt(request, env.ACCESS_AUD);
@@ -199,11 +202,13 @@ async function route(request: Request, env: Env): Promise<Response> {
     if (!env.CLOUDFLARE_ACCOUNT_ID || !env.R2_SQL_TOKEN) {
       return Response.json({ error: "R2 SQL not configured" }, { status: 500 });
     }
-    return handleAdminTrends({
-      accountId: env.CLOUDFLARE_ACCOUNT_ID,
-      token: env.R2_SQL_TOKEN,
-      bucket: "road-conditions-logs",
-    });
+    return withEdgeCache(request, ctx, 900, () =>
+      handleAdminTrends({
+        accountId: env.CLOUDFLARE_ACCOUNT_ID!,
+        token: env.R2_SQL_TOKEN!,
+        bucket: "road-conditions-logs",
+      }),
+    );
   }
 
   return Response.json({ error: "Not found" }, { status: 404 });

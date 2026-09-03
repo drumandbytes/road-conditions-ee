@@ -1,4 +1,5 @@
 import Stripe from "stripe";
+import { evictAuthCache } from "../auth";
 import { deleteUser } from "../db";
 import type { UserRow } from "../db";
 
@@ -34,5 +35,6 @@ export async function handleDeleteAccount(
   }
 
   await deleteUser(env.DB, user.id);
+  if (user.bearer_token) evictAuthCache(user.bearer_token);
   return Response.json({ success: true });
 }

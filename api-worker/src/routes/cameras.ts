@@ -24,7 +24,12 @@ const IMAGE_CACHE_TTL_SECONDS = 60;
 
 /** Paid tier: proxies the camera's live image from Tark Tee. Never redirects straight to
  *  Tark Tee's URL (see plan's security principle: upstream links stay server-side only). */
-export async function handleCameraImage(cameraId: string, user: UserRow | null, db: D1Database): Promise<Response> {
+export async function handleCameraImage(
+  cameraId: string,
+  user: UserRow | null,
+  db: D1Database,
+  ctx: ExecutionContext,
+): Promise<Response> {
   if (!user) {
     return Response.json({ error: "Live camera images require an active subscription" }, { status: 402 });
   }
@@ -44,11 +49,16 @@ export async function handleCameraImage(cameraId: string, user: UserRow | null, 
     }
     upstream = new Response(upstream.body, upstream);
     upstream.headers.set("Cache-Control", `public, max-age=${IMAGE_CACHE_TTL_SECONDS}`);
-    await cache.put(cacheKey, upstream.clone());
+    ctx.waitUntil(cache.put(cacheKey, upstream.clone()));
   }
 
   return new Response(upstream.body, {
     status: 200,
-    headers: { "Content-Type": upstream.headers.get("Content-Type") ?? "image/jpeg" },
+    headers: {
+      "Content-Type": upstream.headers.get("Content-Type") ?? "image/jpeg",
+      // Let the browser serve CameraModal's 60 s poll from its own cache instead of
+      // round-tripping the worker each time.
+      "Cache-Control": `public, max-age=${IMAGE_CACHE_TTL_SECONDS}`,
+    },
   });
 }

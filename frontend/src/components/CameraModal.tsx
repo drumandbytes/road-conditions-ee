@@ -38,6 +38,10 @@ export function CameraModal({ cameraId, cameraName, onClose, t }: CameraModalPro
     let cancelled = false;
 
     function load() {
+      // A backgrounded tab keeps its interval running but has nothing to show — skip the
+      // fetch (worker proxy + upstream hit) until it's visible again; the visibilitychange
+      // listener below refreshes on return.
+      if (document.hidden) return;
       fetchCameraImage(cameraId)
         .then(async (res) => {
           if (cancelled) return;
@@ -70,10 +74,16 @@ export function CameraModal({ cameraId, cameraName, onClose, t }: CameraModalPro
     const refreshInterval = setInterval(load, REFRESH_INTERVAL_MS);
     const tickInterval = setInterval(() => setTick((n) => n + 1), 1000);
 
+    function onVisible() {
+      if (!document.hidden) load();
+    }
+    document.addEventListener("visibilitychange", onVisible);
+
     return () => {
       cancelled = true;
       clearInterval(refreshInterval);
       clearInterval(tickInterval);
+      document.removeEventListener("visibilitychange", onVisible);
       if (currentObjectUrl) URL.revokeObjectURL(currentObjectUrl);
     };
   }, [cameraId]);

@@ -1,5 +1,5 @@
 import Stripe from "stripe";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { handleWeatherStations } from "../src/routes/weather";
 import { handleCameraImage, handleCameras } from "../src/routes/cameras";
 import { handleGeocode } from "../src/routes/geocode";
@@ -15,7 +15,7 @@ import { handleGetEmailPreferences, handleUpdateEmailPreferences } from "../src/
 import { handleStripeWebhook } from "../src/routes/stripe-webhook";
 import { handleUnsubscribeGet, handleUnsubscribePost } from "../src/routes/unsubscribe";
 import { corsHeaders, handlePreflight, isAllowedOrigin } from "../src/cors";
-import { authenticatePaidUser } from "../src/auth";
+import { authenticatePaidUser, evictAuthCache } from "../src/auth";
 import { getEmailPreferences, updateSubscriptionStatusByStripeCustomerId, updateEmailPreferences, upsertUserFromStripe } from "../src/db";
 import type { UserRow } from "../src/db";
 import { buildUnsubscribeLink, signUnsubscribeToken, verifyUnsubscribeToken } from "../src/unsubscribe";
@@ -143,6 +143,7 @@ describe("handleCameras", () => {
 });
 
 describe("handleCameraImage", () => {
+  const ctx = { waitUntil: (p: Promise<unknown>) => void p, passThroughOnException: () => {} } as ExecutionContext;
   const activeUser: UserRow = {
     id: "u1",
     email: null,
@@ -158,19 +159,19 @@ describe("handleCameraImage", () => {
 
   it("returns 402 when there is no authenticated paid user", async () => {
     const db = fakeDb([]);
-    const res = await handleCameraImage("cam-1", null, db);
+    const res = await handleCameraImage("cam-1", null, db, ctx);
     expect(res.status).toBe(402);
   });
 
   it("returns 404 when the camera doesn't exist", async () => {
     const db = fakeDb([]);
-    const res = await handleCameraImage("missing-id", activeUser, db);
+    const res = await handleCameraImage("missing-id", activeUser, db, ctx);
     expect(res.status).toBe(404);
   });
 
   it("returns 404 when the camera has no image_url", async () => {
     const db = fakeDb([{ id: "cam-1", name: "Lokuti", lat: 58.5, lng: 25.9, image_url: null }]);
-    const res = await handleCameraImage("cam-1", activeUser, db);
+    const res = await handleCameraImage("cam-1", activeUser, db, ctx);
     expect(res.status).toBe(404);
   });
 
@@ -185,7 +186,7 @@ describe("handleCameraImage", () => {
     vi.stubGlobal("fetch", fetchMock);
     vi.stubGlobal("caches", { default: { match: vi.fn().mockResolvedValue(undefined), put: cachePut } });
 
-    const res = await handleCameraImage("cam-1", activeUser, db);
+    const res = await handleCameraImage("cam-1", activeUser, db, ctx);
 
     expect(res.status).toBe(200);
     expect(res.headers.get("Content-Type")).toBe("image/jpeg");
@@ -291,6 +292,10 @@ describe("CORS", () => {
 });
 
 describe("authenticatePaidUser", () => {
+  // The paid-user lookup memoizes per isolate; these cases reuse one token across different
+  // fake DBs, so clear it between them.
+  beforeEach(() => evictAuthCache("tok"));
+
   it("returns null when there is no Authorization header", async () => {
     const db = fakeDb([]);
     const req = new Request("https://example.com/api/vms");
