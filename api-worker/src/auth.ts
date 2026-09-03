@@ -7,6 +7,20 @@ function extractBearerToken(request: Request): string | null {
   return token || null;
 }
 
+// Every paid route starts with a bearer-token → user D1 read. Polling clients (an open camera
+// modal, layer refreshes) hit the same warm isolate repeatedly, so a short-lived per-isolate
+// memo cuts that read. Only *paid* users are cached — a not-found or free-tier lookup is never
+// stored, so a free→paid upgrade takes effect on the very next request. Worst case: a
+// portal-cancelled subscription keeps working for up to AUTH_CACHE_TTL_MS in one isolate.
+const AUTH_CACHE_TTL_MS = 30_000;
+const authCache = new Map<string, { user: UserRow; expires: number }>();
+
+/** Drop a token from the memo — call after anything that invalidates it server-side, e.g.
+ *  account deletion. */
+export function evictAuthCache(token: string): void {
+  authCache.delete(token);
+}
+
 /** Extracts and validates the bearer token from an Authorization header, returning the
  *  associated user if valid and on the paid tier, or null otherwise. Never throws — callers
  *  should treat null as "not authorized" and respond 401/402 as appropriate. */
@@ -17,8 +31,12 @@ export async function authenticatePaidUser(
   const token = extractBearerToken(request);
   if (!token) return null;
 
+  const cached = authCache.get(token);
+  if (cached && cached.expires > Date.now()) return cached.user;
+
   const user = await getUserByBearerToken(db, token);
   if (!user || (user.subscription_status !== "active" && user.subscription_status !== "lifetime")) return null;
+  authCache.set(token, { user, expires: Date.now() + AUTH_CACHE_TTL_MS });
   return user;
 }
 
