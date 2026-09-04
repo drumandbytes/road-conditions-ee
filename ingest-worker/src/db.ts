@@ -12,6 +12,40 @@ async function batchIfNonEmpty(db: D1Database, statements: D1PreparedStatement[]
   await db.batch(statements);
 }
 
+// Deletes rows whose id is no longer in the upstream feed. Two hazards this guards against,
+// both seen in production:
+//   - a wide `WHERE id IN (?, ?, …)` past ~380 ids hits D1's bound-parameter limit
+//     ("too many SQL variables") — so chunk it.
+//   - a feed that returns nothing on a transient failure (a 200 with an empty body, a broken
+//     paginated fetch) makes *every* stored row look "disappeared". Wiping the table then
+//     re-filling it next poll is bad on its own, and for restrictions it re-fires a push
+//     notification for every row as it re-appears. A >50% single-poll drop is almost never
+//     real churn (Estonia always has hundreds of active restrictions / signs), so skip and
+//     let the next healthy poll handle it.
+const PRUNE_CHUNK = 90;
+
+async function pruneDisappearedRows(
+  db: D1Database,
+  table: string,
+  idColumn: string,
+  storedIds: Array<number | string>,
+  currentIds: Set<number | string>,
+): Promise<void> {
+  const gone = storedIds.filter((id) => !currentIds.has(id));
+  if (gone.length === 0) return;
+  if (storedIds.length >= 10 && gone.length > storedIds.length / 2) {
+    console.warn(
+      `[ingest-worker] pruneDisappearedRows(${table}): ${gone.length}/${storedIds.length} rows vanished in one poll — skipping as a likely feed glitch`,
+    );
+    return;
+  }
+  for (let i = 0; i < gone.length; i += PRUNE_CHUNK) {
+    const chunk = gone.slice(i, i + PRUNE_CHUNK);
+    const placeholders = chunk.map(() => "?").join(",");
+    await db.prepare(`DELETE FROM ${table} WHERE ${idColumn} IN (${placeholders})`).bind(...chunk).run();
+  }
+}
+
 export async function upsertWeatherReadings(db: D1Database, readings: WeatherReading[]): Promise<void> {
   const stmt = db.prepare(
     `INSERT INTO weather_stations (
@@ -224,9 +258,8 @@ async function translateChangedExtraInfo(
 // used to be a 30-min-only feed specifically to keep write volume down, which meant a brand
 // new closure or a changed detour could take up to 30 minutes to show up). Rows whose fields
 // are unchanged from last poll cost nothing at all; only genuinely new/changed rows get
-// written, and only rows that actually disappeared from the upstream feed get deleted (a
-// small, bounded list — not the `id NOT IN (...)` sweep that broke on this table's ~380 rows
-// with a "too many SQL variables" error earlier this session).
+// written, and rows that fell out of the feed get deleted via pruneDisappearedRows (chunked,
+// and guarded against a degraded feed wiping the whole table).
 // Returns the restrictions whose core fields are new/different (see
 // restrictionCoreFieldsChanged) — candidates for push-notification matching, distinct from
 // `changed` below (which also includes pure translation-retry rewrites that shouldn't
@@ -268,11 +301,17 @@ export async function upsertRestrictions(db: D1Database, ai: Ai, restrictions: R
     ),
   );
 
-  const currentIds = new Set(restrictions.map((r) => r.id));
-  const disappearedIds = existing.results.map((r) => r.id).filter((id) => !currentIds.has(id));
-  if (disappearedIds.length > 0) {
-    const placeholders = disappearedIds.map(() => "?").join(",");
-    await db.prepare(`DELETE FROM restrictions WHERE id IN (${placeholders})`).bind(...disappearedIds).run();
+  // Skip the prune when the feed returned nothing — an empty ArcGIS response is a degraded
+  // service, not "every restriction ended" (there are always hundreds active). Wiping + refilling
+  // would also re-fire a push notification for every row as it re-appears.
+  if (restrictions.length > 0) {
+    await pruneDisappearedRows(
+      db,
+      "restrictions",
+      "id",
+      existing.results.map((r) => r.id),
+      new Set(restrictions.map((r) => r.id)),
+    );
   }
 
   return changedForNotification;
@@ -318,11 +357,16 @@ export async function upsertDetours(db: D1Database, detours: Detour[]): Promise<
     changed.map((d) => stmt.bind(d.id, d.restrictionId, d.description, d.dateFrom, d.dateTo)),
   );
 
-  const currentIds = new Set(detours.map((d) => d.id));
-  const disappearedIds = existing.results.map((d) => d.id).filter((id) => !currentIds.has(id));
-  if (disappearedIds.length > 0) {
-    const placeholders = disappearedIds.map(() => "?").join(",");
-    await db.prepare(`DELETE FROM detours WHERE id IN (${placeholders})`).bind(...disappearedIds).run();
+  // detours can legitimately be empty (no active restriction has one), but so can a broken
+  // feed — a delayed prune is harmless either way, so gate on a non-empty fetch.
+  if (detours.length > 0) {
+    await pruneDisappearedRows(
+      db,
+      "detours",
+      "id",
+      existing.results.map((d) => d.id),
+      new Set(detours.map((d) => d.id)),
+    );
   }
 }
 
@@ -386,11 +430,17 @@ export async function upsertVmsSigns(db: D1Database, signs: VmsSign[]): Promise<
     ),
   );
 
-  const currentIds = new Set(signs.map((s) => s.id));
-  const disappearedIds = existing.results.map((s) => s.sign_id).filter((id) => !currentIds.has(id));
-  if (disappearedIds.length > 0) {
-    const placeholders = disappearedIds.map(() => "?").join(",");
-    await db.prepare(`DELETE FROM vms_signs WHERE sign_id IN (${placeholders})`).bind(...disappearedIds).run();
+  // The VMS ArcGIS layer is documented as flaky (pagination past 100 returns 0 rather than the
+  // remainder — see arcgis.ts) so an empty/truncated fetch is plausible; the >0 gate plus
+  // pruneDisappearedRows' >50% guard keep a glitch from wiping the layer.
+  if (signs.length > 0) {
+    await pruneDisappearedRows(
+      db,
+      "vms_signs",
+      "sign_id",
+      existing.results.map((s) => s.sign_id),
+      new Set(signs.map((s) => s.id)),
+    );
   }
 }
 
@@ -406,16 +456,12 @@ export async function upsertCameras(db: D1Database, cameras: CameraMeta[]): Prom
   await batchIfNonEmpty(db, cameras.map((c) => stmt.bind(c.id, c.name, c.lat, c.lng, c.imageUrl)));
 }
 
-// D1's bound-parameter ceiling is low, and a wide `IN (...)` list has already broken this
-// repo once (see upsertRestrictions' comment). A total feed failure makes *every* stored row
-// "disappeared" at once, so this cleanup must chunk.
-const HAZARD_DELETE_CHUNK = 90;
-
 /** Upserts hazards and returns only the ones that are new or changed since last poll
  *  (i.e. candidates for push-notification matching).
  *
  *  `pruneDisappeared` must be false unless this poll saw every SRTI feed respond — otherwise
- *  one feed erroring deletes every hazard of its type, and a total failure wipes the table. */
+ *  one feed erroring deletes every hazard of its type. (pruneDisappearedRows' own >50% guard
+ *  is a coarser backstop, not a substitute for this per-feed check.) */
 export async function upsertHazardsAndGetChanged(
   db: D1Database,
   hazards: HazardRecord[],
@@ -452,13 +498,13 @@ export async function upsertHazardsAndGetChanged(
   );
 
   if (pruneDisappeared) {
-    const currentKeys = new Set(byKey.keys());
-    const disappearedIds = existing.results.map((r) => r.external_id).filter((id) => !currentKeys.has(id));
-    for (let i = 0; i < disappearedIds.length; i += HAZARD_DELETE_CHUNK) {
-      const chunk = disappearedIds.slice(i, i + HAZARD_DELETE_CHUNK);
-      const placeholders = chunk.map(() => "?").join(",");
-      await db.prepare(`DELETE FROM hazards WHERE external_id IN (${placeholders})`).bind(...chunk).run();
-    }
+    await pruneDisappearedRows(
+      db,
+      "hazards",
+      "external_id",
+      existing.results.map((r) => r.external_id),
+      new Set(byKey.keys()),
+    );
   }
 
   return changed;
