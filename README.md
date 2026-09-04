@@ -35,10 +35,11 @@ once approved.
 
 ## Map tiles
 
-Self-hosted on R2 (`road-conditions-ee-tiles` bucket), built from
-[Protomaps](https://protomaps.com)' free, open-source daily OSM basemap: a single
+Self-hosted on R2 (`road-conditions-ee-tiles` bucket), a bbox extract of
+[Protomaps](https://protomaps.com)' free, open-source OSM planet build: a single
 `estonia.pmtiles` file (~313MB, zoom 0–15), served via a custom domain
 (`tiles.roadconditions.drumandbytes.ee`) rather than R2's rate-limited/uncached `r2.dev` dev URL.
+Rebuilt weekly by `.github/workflows/regenerate-tiles.yml`.
 
 No tile server, no third-party API dependency, no fair-use risk (unlike the raw
 `tile.openstreetmap.org` server). No separate world/backdrop tileset — `MAX_PAN_BOUNDS` in

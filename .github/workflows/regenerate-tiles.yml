@@ -1,0 +1,68 @@
+# Rebuilds estonia.pmtiles from the current Protomaps daily basemap and uploads it to the
+# tiles R2 bucket. The archive is a bbox extract of Protomaps' ~137 GB planet build — pmtiles
+# extract pulls only the Estonia region over HTTP range requests, so this stays cheap.
+#
+# Nothing was regenerating it before (the served file was ~8 weeks stale). Weekly is plenty
+# for a road overlay; bump the cron to daily if the base network needs to be fresher.
+#
+# Secrets: R2_S3_ACCESS_KEY_ID / R2_S3_SECRET_ACCESS_KEY — an R2 API token's S3 credentials
+# (dashboard → R2 → Manage R2 API Tokens → Object Read & Write on road-conditions-ee-tiles).
+name: Regenerate tiles
+
+on:
+  schedule:
+    - cron: "0 4 * * 1" # Mondays 04:00 UTC
+  workflow_dispatch:
+
+concurrency:
+  group: regenerate-tiles
+  cancel-in-progress: false
+
+jobs:
+  regenerate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      # Kept in sync with estonia.pmtiles' extract bbox documented in
+      # frontend/src/lib/config.ts (MAX_PAN_BOUNDS must stay inside this).
+      BBOX: "20.9,57.4,28.35,59.9"
+      BUCKET: road-conditions-ee-tiles
+      AWS_DEFAULT_REGION: auto
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_S3_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_S3_SECRET_ACCESS_KEY }}
+      # aws-cli v2.23+ adds checksum headers that R2 rejects on multipart uploads.
+      AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+      AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+    steps:
+      - name: Install pmtiles CLI
+        run: |
+          curl -sSL "https://github.com/protomaps/go-pmtiles/releases/download/v1.31.2/go-pmtiles_1.31.2_Linux_x86_64.tar.gz" \
+            | tar -xz pmtiles
+          sudo mv pmtiles /usr/local/bin/
+
+      - name: Extract Estonia from the latest Protomaps build
+        run: |
+          KEY=$(curl -sSf https://build-metadata.protomaps.dev/builds.json | jq -r '.[-1].key')
+          echo "Latest Protomaps build: $KEY"
+          pmtiles extract "https://build.protomaps.com/$KEY" estonia.pmtiles \
+            --bbox="$BBOX" --maxzoom=15
+          pmtiles verify estonia.pmtiles
+
+      - name: Sanity-check size
+        run: |
+          BYTES=$(stat -c%s estonia.pmtiles)
+          echo "estonia.pmtiles: $((BYTES / 1024 / 1024)) MiB"
+          # The extract has been ~313 MB; fail loudly on anything wildly off (truncated build,
+          # wrong bbox) rather than publishing a broken basemap.
+          if [ "$BYTES" -lt 200000000 ] || [ "$BYTES" -gt 700000000 ]; then
+            echo "::error::estonia.pmtiles size $BYTES is outside the expected range"
+            exit 1
+          fi
+
+      - name: Upload to R2
+        run: |
+          aws s3 cp estonia.pmtiles "s3://${BUCKET}/estonia.pmtiles" \
+            --endpoint-url "https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com" \
+            --content-type application/octet-stream \
+            --cache-control "public, max-age=86400" \
+            --no-progress
