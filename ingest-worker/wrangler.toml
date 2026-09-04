@@ -24,9 +24,10 @@ database_name = "road-conditions"
 database_id = "b4a456a7-c3f3-4a1e-95e5-4a8b7af4deb1"
 
 # Long-term operational log export — see src/log.ts. Feeds the ingest_worker_logs_pipeline ->
-# ingest_worker_logs_sink -> R2 Data Catalog Iceberg table (ingest_worker.cycle_logs, in the
-# road-conditions-logs bucket). Created via `wrangler pipelines streams/sinks/create`, not
-# declarable in this file.
+# ingest_worker_logs_sink -> R2 Data Catalog Iceberg table (ingest_worker.cycle_logs_v2, in the
+# road-conditions-logs bucket). Only the stream is declarable here; the sink + pipeline are
+# created manually — see scripts/recreate-logs-sink.sh for the exact commands and why the
+# sink rolls every 6h.
 [[pipelines]]
 binding = "LOG_STREAM"
 stream = "ed2f32a41c584bcf813b41543b21b24f"
