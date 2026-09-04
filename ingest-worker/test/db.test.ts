@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { upsertHazardsAndGetChanged } from "../src/db";
 import type { HazardRecord } from "../src/tarktee";
 
@@ -126,13 +126,28 @@ describe("upsertHazardsAndGetChanged", () => {
     expect(getDeletedIds()).toBeNull();
   });
 
-  it("chunks the disappeared-row delete so a full-table wipe can't exceed D1's parameter limit", async () => {
-    const existing = Array.from({ length: 200 }, (_, i) => ({ external_id: `h${i}`, content_hash: "v1" }));
+  it("chunks the disappeared-row delete so it can't exceed D1's parameter limit", async () => {
+    const existing = Array.from({ length: 300 }, (_, i) => ({ external_id: `h${i}`, content_hash: "v1" }));
     const { db, getDeletedIds } = fakeHazardsDb(existing);
 
-    await upsertHazardsAndGetChanged(db, []);
+    // 100 gone (< 50%, so not treated as a glitch), spread across 2 DELETE statements at chunk size 90.
+    const stillPresent = existing.slice(0, 200).map((r) => hazard({ externalId: r.external_id, contentHash: "v1" }));
+    await upsertHazardsAndGetChanged(db, stillPresent);
 
-    // All 200 removed, but across multiple DELETE statements (chunk size 90).
-    expect(getDeletedIds()).toHaveLength(200);
+    expect(getDeletedIds()).toHaveLength(100);
+  });
+
+  it("skips the prune when more than half the table vanished in one poll (likely a feed glitch)", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const existing = Array.from({ length: 20 }, (_, i) => ({ external_id: `h${i}`, content_hash: "v1" }));
+    const { db, getDeletedIds } = fakeHazardsDb(existing);
+
+    // Only 5 of 20 still present — a 75% drop.
+    const stillPresent = existing.slice(0, 5).map((r) => hazard({ externalId: r.external_id, contentHash: "v1" }));
+    await upsertHazardsAndGetChanged(db, stillPresent);
+
+    expect(getDeletedIds()).toBeNull();
+    expect(warn).toHaveBeenCalledOnce();
+    warn.mockRestore();
   });
 });
