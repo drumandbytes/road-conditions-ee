@@ -6,6 +6,11 @@ const HAZARD_TYPES = ["slippery", "obstacle", "accident", "roadworks", "reduced_
 
 const TREND_WINDOW_DAYS = 30;
 
+// The Pipeline sink can't be repointed at an existing Iceberg table, so changing its roll
+// interval (5min -> 6h, to stop snapshot churn) meant a new table. Old data isn't migrated —
+// cycle_logs stops receiving writes and drains via snapshot expiration.
+const LOG_TABLE = "ingest_worker.cycle_logs_v2";
+
 // `day` (a date string) plus one number per hazard type (see HAZARD_TYPES) — a nominal
 // interface can't express "this one key is a string, the rest are numbers" cleanly, so this
 // is deliberately loose; consumers know `day` is the date and everything else is a count.
@@ -41,7 +46,7 @@ export async function getAdminTrends(config: R2SqlConfig): Promise<AdminTrends> 
       config.token,
       config.bucket,
       `SELECT date_trunc('day', ts) AS day, ${hazardColumns}
-       FROM ingest_worker.cycle_logs
+       FROM ${LOG_TABLE}
        WHERE event = 'pollFast' AND ts > now() - INTERVAL '${TREND_WINDOW_DAYS} days'
        GROUP BY date_trunc('day', ts)
        ORDER BY day`,
@@ -53,7 +58,7 @@ export async function getAdminTrends(config: R2SqlConfig): Promise<AdminTrends> 
       `SELECT date_trunc('day', ts) AS day,
               COUNT(*) FILTER (WHERE level = 'INFO') AS info_count,
               COUNT(*) FILTER (WHERE level != 'INFO') AS issue_count
-       FROM ingest_worker.cycle_logs
+       FROM ${LOG_TABLE}
        WHERE ts > now() - INTERVAL '${TREND_WINDOW_DAYS} days'
        GROUP BY date_trunc('day', ts)
        ORDER BY day`,
@@ -63,7 +68,7 @@ export async function getAdminTrends(config: R2SqlConfig): Promise<AdminTrends> 
       config.token,
       config.bucket,
       `SELECT date_trunc('day', ts) AS day, ${feedErrorColumns}
-       FROM ingest_worker.cycle_logs
+       FROM ${LOG_TABLE}
        WHERE event = 'pollFast' AND ts > now() - INTERVAL '${TREND_WINDOW_DAYS} days'
        GROUP BY date_trunc('day', ts)
        ORDER BY day`,

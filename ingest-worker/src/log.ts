@@ -1,6 +1,6 @@
 // Structured per-cycle logging — one entry per poll cycle, sent to the ingest_worker_logs
 // Pipeline, which lands it as a real row in the road-conditions-logs bucket's R2 Data Catalog
-// Iceberg table (ingest_worker.cycle_logs), queryable with R2 SQL. Previously wrote one raw
+// Iceberg table (ingest_worker.cycle_logs_v2), queryable with R2 SQL. Previously wrote one raw
 // JSON object per R2 write instead (see git history) — replaced once this was confirmed
 // working end-to-end with real production cycles, since keeping both stored the same data
 // twice for no benefit.

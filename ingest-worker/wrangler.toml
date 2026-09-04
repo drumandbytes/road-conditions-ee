@@ -24,9 +24,24 @@ database_name = "road-conditions"
 database_id = "b4a456a7-c3f3-4a1e-95e5-4a8b7af4deb1"
 
 # Long-term operational log export — see src/log.ts. Feeds the ingest_worker_logs_pipeline ->
-# ingest_worker_logs_sink -> R2 Data Catalog Iceberg table (ingest_worker.cycle_logs, in the
-# road-conditions-logs bucket). Created via `wrangler pipelines streams/sinks/create`, not
-# declarable in this file.
+# ingest_worker_logs_sink -> R2 Data Catalog Iceberg table (ingest_worker.cycle_logs_v2, in the
+# road-conditions-logs bucket, queried by api-worker's admin-trends.ts).
+#
+# Only the stream is declarable here. The sink + pipeline are created manually and can't be
+# modified — to change anything, delete both and recreate (needs an R2 Admin R&W API token):
+#
+#   wrangler pipelines delete ingest_worker_logs_pipeline
+#   wrangler pipelines sinks delete ingest_worker_logs_sink
+#   wrangler pipelines sinks create ingest_worker_logs_sink --type r2-data-catalog \
+#     --bucket road-conditions-logs --namespace ingest_worker --table cycle_logs_vN \
+#     --catalog-token <token> --compression zstd --roll-interval 21600
+#   wrangler pipelines create ingest_worker_logs_pipeline \
+#     --sql "INSERT INTO ingest_worker_logs_sink SELECT * FROM ingest_worker_logs"
+#
+# A recreate needs a fresh table name (sinks can't attach to an existing table) — bump
+# cycle_logs_vN and LOG_TABLE in admin-trends.ts together. roll-interval is 6h (21600s), not
+# the 300s default: at 300s the table got a snapshot + tiny file every 5 min and the metadata
+# outgrew the data ~150x.
 [[pipelines]]
 binding = "LOG_STREAM"
 stream = "ed2f32a41c584bcf813b41543b21b24f"
