@@ -28,6 +28,7 @@ function hazard(overrides: Partial<HazardRecord> = {}): HazardRecord {
     description: "Icy patch",
     startsAt: null,
     endsAt: null,
+    contentHash: "v1",
     rawJson: "{}",
     ...overrides,
   };

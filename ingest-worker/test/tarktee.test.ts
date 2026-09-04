@@ -170,7 +170,7 @@ describe("tarktee.ts", () => {
     expect(result.skipped).toEqual([]);
     expect(result.records).toEqual([
       expect.objectContaining({
-        externalId: "11c44ffe-7474-4578-a8ff-39b9765387c9",
+        externalId: "roadworks:59.33447:24.80760",
         eventType: "roadworks",
         lat: 59.33447,
         lng: 24.807602,
@@ -178,15 +178,13 @@ describe("tarktee.ts", () => {
     ]);
   });
 
-  // Regression test: externalId is a NOT NULL D1 primary key — a record with neither its own
-  // id nor a fallback situation id must be skipped, not passed through as `undefined` (which
-  // would fail the whole batch write for every hazard type fetched that cycle, not just this
-  // record — see db.ts's upsertHazardsAndGetChanged).
-  it("skips a situation record with no usable id instead of producing an undefined externalId", async () => {
+  // The synthetic key is derived from event type + coordinates, so a record with no id of its
+  // own (the SRTI feed's ids churn every publication anyway) is still perfectly usable — only
+  // a missing/invalid location makes a record unusable now.
+  it("derives a stable key from event type and location, not the feed's record id", async () => {
     const fetchMock = mockFetchOnceJson({
       situation: [
         {
-          // situation.id itself missing too, not just situationRecord[].id
           situationRecord: [
             {
               locationReference: {
@@ -202,8 +200,10 @@ describe("tarktee.ts", () => {
 
     const result = await fetchHazards("test-key-123", "slippery");
 
-    expect(result.records).toEqual([]);
-    expect(result.skipped).toEqual([{ reason: "no-id", raw: expect.any(String) }]);
+    expect(result.skipped).toEqual([]);
+    expect(result.records).toEqual([
+      expect.objectContaining({ externalId: "slippery:59.40000:24.70000", eventType: "slippery" }),
+    ]);
   });
 
   // Regression test for a real production incident: Tark Tee's animalObstacle SRTI endpoint
@@ -242,7 +242,9 @@ describe("tarktee.ts", () => {
 
     const { records, perFeed, hasIssue } = await fetchAllHazards("test-key-123");
 
-    expect(records).toEqual([expect.objectContaining({ externalId: "situation-1", eventType: "slippery" })]);
+    expect(records).toEqual([
+      expect.objectContaining({ externalId: "slippery:59.40000:24.70000", eventType: "slippery" }),
+    ]);
     expect(perFeed.obstacle.error).toContain("502");
     expect(perFeed.slippery).toEqual({ situations: 1, usable: 1 });
     // hasIssue surfaces the failed feed to the caller's own single combined log line (see

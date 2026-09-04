@@ -102,15 +102,38 @@ const SRTI_ENDPOINTS: Record<HazardEventType, string> = {
   weather: "srti/exceptionalWeather",
 };
 
+// The SRTI feed reissues a fresh situationRecord.id (UUID) on every publication, even for the
+// same physical hazard — keying the table on it grew it ~200 rows every 3-min poll until the
+// diff query (SELECT ... raw_json FROM hazards) hit D1's per-query memory limit and froze
+// hazard ingestion entirely. Key on what actually identifies a hazard to a driver instead:
+// its type and location.
+export function hazardKey(eventType: HazardEventType, lat: number, lng: number): string {
+  return `${eventType}:${lat.toFixed(5)}:${lng.toFixed(5)}`;
+}
+
+// FNV-1a over the user-visible fields — a compact change-detection digest so the poll diff
+// never has to read raw_json. A collision only costs a missed "hazard updated" push, never
+// correctness.
+export function hazardContentHash(parts: Array<string | null>): string {
+  let h = 0x811c9dc5;
+  const s = parts.map((p) => p ?? "").join("\x1f");
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(16);
+}
+
 export interface HazardRecord {
-  externalId: string;
+  externalId: string; // synthetic stable key — see hazardKey
   eventType: HazardEventType;
   lat: number;
   lng: number;
   description: string | null;
   startsAt: string | null;
   endsAt: string | null;
-  rawJson: string;
+  contentHash: string;
+  rawJson: string; // full DATEX fragment, kept for debugging/replay only — never read on the hot path
 }
 
 // Confirmed against a real production payload (a "shortTermRoadWorks" record, 2026-07-26) —
@@ -181,26 +204,19 @@ export async function fetchHazards(
         skipped.push({ reason: "no-location", raw: JSON.stringify(record) });
         continue;
       }
-      // externalId is a NOT NULL primary key in D1. record.id is confirmed present on real
-      // payloads (see this interface's own comment above); situation.id is kept as a fallback
-      // regardless, since a runtime-missing id must be skipped here rather than reaching db.ts
-      // as `undefined` and failing the entire batch write for every hazard type fetched this
-      // cycle, not just this one record.
-      const externalId = record.id ?? situation.id;
-      if (!externalId) {
-        skipped.push({ reason: "no-id", raw: JSON.stringify(record) });
-        continue;
-      }
       const commentValues = record.generalPublicComment?.[0]?.comment?.values ?? [];
       const description = commentValues.find((v) => v.lang === "et")?.value ?? commentValues[0]?.value ?? null;
+      const startsAt = record.validity?.validityTimeSpecification?.overallStartTime ?? null;
+      const endsAt = record.validity?.validityTimeSpecification?.overallEndTime ?? null;
       records.push({
-        externalId,
+        externalId: hazardKey(eventType, loc.latitude, loc.longitude),
         eventType,
         lat: loc.latitude,
         lng: loc.longitude,
         description,
-        startsAt: record.validity?.validityTimeSpecification?.overallStartTime ?? null,
-        endsAt: record.validity?.validityTimeSpecification?.overallEndTime ?? null,
+        startsAt,
+        endsAt,
+        contentHash: hazardContentHash([eventType, description, startsAt, endsAt]),
         rawJson: JSON.stringify(record),
       });
     }
