@@ -129,14 +129,14 @@ async function pollFast(env: Env): Promise<void> {
   });
 
   outcomes.hazards = await runStep(env, "hazards", async () => {
-    // Skip entirely rather than fetch (which returns [] per feed type until TARKTEE_API_KEY
-    // is active — registration pending) — upsertHazardsAndGetChanged treats an empty input as
-    // "confirmed zero hazards" and deletes every existing row accordingly. Without this guard,
-    // any hazard row that ever existed would get wiped on the very next poll while the key is
-    // unset, since there'd be nothing to distinguish "genuinely zero" from "didn't really fetch".
+    // Skip entirely rather than fetch — with no key every feed returns [], which would look
+    // like "confirmed zero hazards" and prune the whole table.
     if (!env.TARKTEE_API_KEY) return;
     const { records, perFeed, hasIssue } = await fetchAllHazards(env.TARKTEE_API_KEY);
-    changedHazards = await upsertHazardsAndGetChanged(env.DB, records);
+    // Only prune disappeared rows when every SRTI feed actually responded this poll — a single
+    // feed erroring must not delete every hazard of its type.
+    const allFeedsResponded = Object.values(perFeed).every((f) => !f.error);
+    changedHazards = await upsertHazardsAndGetChanged(env.DB, records, { pruneDisappeared: allFeedsResponded });
     return { changed: changedHazards.length, perFeed, hasIssue };
   });
 

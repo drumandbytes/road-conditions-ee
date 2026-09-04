@@ -84,7 +84,11 @@ CREATE TABLE saved_points (
 CREATE INDEX idx_saved_points_user ON saved_points(user_id);
 
 CREATE TABLE hazards (
-  external_id TEXT PRIMARY KEY,      -- Tark Tee's own event/situation ID from DATEX II payload
+  external_id TEXT PRIMARY KEY,      -- synthetic stable key '<event_type>:<lat>:<lng>' (5dp) —
+                                      -- see ingest-worker/src/tarktee.ts hazardKey(). NOT the
+                                      -- DATEX situationRecord id: that feed reissues a fresh
+                                      -- UUID every publication, which grew this table ~200
+                                      -- rows/poll until the diff query blew D1's memory limit.
   event_type TEXT NOT NULL,          -- 'slippery' | 'obstacle' | 'accident' | 'roadworks' |
                                       -- 'reduced_visibility' | 'blockage' | 'weather'
   lat REAL NOT NULL,
@@ -92,6 +96,8 @@ CREATE TABLE hazards (
   description TEXT,
   starts_at TEXT,
   ends_at TEXT,                      -- NULL while still active
+  content_hash TEXT,                 -- FNV-1a of the user-visible fields; the poll diff reads
+                                      -- this instead of raw_json for change detection
   raw_json TEXT NOT NULL,            -- full original DATEX II fragment, for debugging/replay
   first_seen_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now')),

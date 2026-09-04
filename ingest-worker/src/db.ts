@@ -406,45 +406,59 @@ export async function upsertCameras(db: D1Database, cameras: CameraMeta[]): Prom
   await batchIfNonEmpty(db, cameras.map((c) => stmt.bind(c.id, c.name, c.lat, c.lng, c.imageUrl)));
 }
 
+// D1's bound-parameter ceiling is low, and a wide `IN (...)` list has already broken this
+// repo once (see upsertRestrictions' comment). A total feed failure makes *every* stored row
+// "disappeared" at once, so this cleanup must chunk.
+const HAZARD_DELETE_CHUNK = 90;
+
 /** Upserts hazards and returns only the ones that are new or changed since last poll
- *  (i.e. candidates for push-notification matching). */
+ *  (i.e. candidates for push-notification matching).
+ *
+ *  `pruneDisappeared` must be false unless this poll saw every SRTI feed respond — otherwise
+ *  one feed erroring deletes every hazard of its type, and a total failure wipes the table. */
 export async function upsertHazardsAndGetChanged(
   db: D1Database,
   hazards: HazardRecord[],
+  { pruneDisappeared = true }: { pruneDisappeared?: boolean } = {},
 ): Promise<HazardRecord[]> {
-  // Same diff-based approach as restrictions/detours/vms_signs above — writing every fetched
-  // hazard on every 3-min poll (rather than only changed ones) was previously the cause of a
-  // ~5.7x D1 write-quota overage on other tables; hazards had been missed when that was fixed.
+  // Diff on the compact content hash, never raw_json: pulling every row's full DATEX fragment
+  // (~1.8 KB each) into one result set is what hit D1's per-query memory limit and froze
+  // hazard ingestion once the table passed ~68k rows.
   const existing = await db
-    .prepare("SELECT external_id, raw_json FROM hazards")
-    .all<{ external_id: string; raw_json: string }>();
-  const existingByExternalId = new Map(existing.results.map((r) => [r.external_id, r.raw_json]));
+    .prepare("SELECT external_id, content_hash FROM hazards")
+    .all<{ external_id: string; content_hash: string | null }>();
+  const existingHashByKey = new Map(existing.results.map((r) => [r.external_id, r.content_hash]));
 
-  const changed = hazards.filter((h) => existingByExternalId.get(h.externalId) !== h.rawJson);
+  // Two records can now collapse to the same synthetic key (same type + rounded location) —
+  // last one wins.
+  const byKey = new Map(hazards.map((h) => [h.externalId, h]));
+  const changed = [...byKey.values()].filter((h) => existingHashByKey.get(h.externalId) !== h.contentHash);
 
   const stmt = db.prepare(
-    `INSERT INTO hazards (external_id, event_type, lat, lng, description, starts_at, ends_at, raw_json, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+    `INSERT INTO hazards (external_id, event_type, lat, lng, description, starts_at, ends_at, content_hash, raw_json, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
      ON CONFLICT(external_id) DO UPDATE SET
        event_type = excluded.event_type, lat = excluded.lat, lng = excluded.lng,
        description = excluded.description, starts_at = excluded.starts_at, ends_at = excluded.ends_at,
-       raw_json = excluded.raw_json, updated_at = datetime('now')`,
+       content_hash = excluded.content_hash, raw_json = excluded.raw_json, updated_at = datetime('now')`,
   );
   await batchIfNonEmpty(
     db,
     changed.map((h) =>
-      stmt.bind(h.externalId, h.eventType, h.lat, h.lng, h.description, h.startsAt, h.endsAt, h.rawJson),
+      stmt.bind(
+        h.externalId, h.eventType, h.lat, h.lng, h.description, h.startsAt, h.endsAt, h.contentHash, h.rawJson,
+      ),
     ),
   );
 
-  // Same disappeared-row cleanup as restrictions/detours/vms_signs above — a hazard missing
-  // from this poll (resolved, expired) must stop showing as active rather than staying in the
-  // table forever; this table was previously missing this step entirely.
-  const currentIds = new Set(hazards.map((h) => h.externalId));
-  const disappearedIds = existing.results.map((r) => r.external_id).filter((id) => !currentIds.has(id));
-  if (disappearedIds.length > 0) {
-    const placeholders = disappearedIds.map(() => "?").join(",");
-    await db.prepare(`DELETE FROM hazards WHERE external_id IN (${placeholders})`).bind(...disappearedIds).run();
+  if (pruneDisappeared) {
+    const currentKeys = new Set(byKey.keys());
+    const disappearedIds = existing.results.map((r) => r.external_id).filter((id) => !currentKeys.has(id));
+    for (let i = 0; i < disappearedIds.length; i += HAZARD_DELETE_CHUNK) {
+      const chunk = disappearedIds.slice(i, i + HAZARD_DELETE_CHUNK);
+      const placeholders = chunk.map(() => "?").join(",");
+      await db.prepare(`DELETE FROM hazards WHERE external_id IN (${placeholders})`).bind(...chunk).run();
+    }
   }
 
   return changed;
