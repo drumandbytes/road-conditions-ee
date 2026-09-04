@@ -1,0 +1,28 @@
+# Monthly trim of ingest_worker.cycle_logs (R2 Data Catalog). Optional — the bucket costs
+# cents at current size; enable the schedule if it grows enough to care. Needs an
+# R2_CATALOG_TOKEN repo secret: an API token with R2 Data Catalog + R2 storage write.
+name: Prune ingest logs
+
+on:
+  schedule:
+    - cron: "0 4 1 * *" # 04:00 UTC on the 1st
+  workflow_dispatch:
+    inputs:
+      retention_days:
+        description: Delete cycle logs older than this many days
+        default: "90"
+
+jobs:
+  prune:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install "pyiceberg[pyarrow]>=0.9,<1"
+      - run: python scripts/prune-ingest-logs.py
+        env:
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          R2_CATALOG_TOKEN: ${{ secrets.R2_CATALOG_TOKEN }}
+          RETENTION_DAYS: ${{ inputs.retention_days || '90' }}
