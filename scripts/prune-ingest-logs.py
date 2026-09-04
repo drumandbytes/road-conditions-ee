@@ -26,7 +26,7 @@ from pyiceberg.expressions import LessThan
 ACCOUNT_ID = os.environ["CF_ACCOUNT_ID"]
 TOKEN = os.environ["R2_CATALOG_TOKEN"]
 RETENTION_DAYS = int(os.environ.get("RETENTION_DAYS", "90"))
-TABLE = "ingest_worker.cycle_logs"
+TABLE = "ingest_worker.cycle_logs_v2"  # keep in sync with LOG_TABLE in api-worker/src/routes/admin-trends.ts
 
 # ts is an Iceberg `timestamp` (tz-naive UTC) — a naive ISO string is what its literal parser
 # expects.
