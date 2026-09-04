@@ -7,7 +7,7 @@ import type { SavedPointsSectionT } from "./SavedPointsSection";
 import type { SignInFormT } from "./SignInForm";
 
 const COFFEE_LINK = "https://buymeacoffee.com/justmaris";
-const ISSUE_LINK = "https://github.com/drumandbytes/road-conditions-ee/issues/new";
+const ISSUE_LINK = "https://github.com/drumandbytes/road-conditions-feedback/issues/new";
 
 // Drag-resize bounds for the panel handle — a fraction of viewport height with a pixel floor
 // (so the header/tabs always stay comfortably visible even on a very short viewport), up to
