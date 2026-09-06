@@ -233,6 +233,12 @@ CREATE TABLE weather_station_history (
   grip_factor REAL
 );
 CREATE UNIQUE INDEX idx_weather_history_station_hour ON weather_station_history(station_name, recorded_at);
+-- pruneWeatherHistory runs `DELETE ... WHERE recorded_at < ?` every ingest cycle.
+-- The composite above starts with station_name, so SQLite can't use it for a
+-- recorded_at-only predicate — the DELETE full-scans the whole table each run
+-- (~20k rows x ~700 calls/day = the bulk of this DB's row reads). This index
+-- makes it an index range scan touching only the rows actually being deleted.
+CREATE INDEX idx_weather_history_recorded_at ON weather_station_history(recorded_at);
 
 -- Also from the ArcGIS service (tram/detours) — alternate-route descriptions tied to a
 -- specific restriction. No lat/lng: a detour describes the same location as the restriction
