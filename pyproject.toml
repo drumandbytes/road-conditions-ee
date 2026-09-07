@@ -2,9 +2,15 @@
 name = "road-conditions-ee-ops"
 version = "0"
 description = "Operational scripts for road-conditions-ee. Not a published package."
-# The Python version and dependencies for scripts/ live here rather than being
-# repeated in the workflow that runs them: prune-ingest-logs.yml reads this via
-# setup-python's python-version-file, and installs with `pip install .`.
+# requires-python is deliberately a floor, not a pin. setup-python reads it via
+# python-version-file and resolves it to the newest available interpreter -- as of
+# the first run under this file, 3.14 rather than the 3.12 the workflow used to
+# hardcode. That is the intended behaviour for this script: one dependency, no
+# compiled extensions of its own, and a monthly schedule that surfaces breakage
+# long before anything depends on it.
+#
+# So: do not "fix" this by adding .python-version. Raise the floor here instead if
+# a newer interpreter ever becomes a hard requirement.
 requires-python = ">=3.12"
 dependencies = ["pyiceberg[pyarrow]>=0.9,<1"]
 

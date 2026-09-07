@@ -20,7 +20,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           # Version and dependencies both come from pyproject.toml, so a bump is
-          # one edit rather than one here and one in the pip line below.
+          # one edit rather than one here and one in the pip line below. Note this
+          # tracks the newest interpreter satisfying requires-python, by choice --
+          # see the comment there before pinning it.
           python-version-file: pyproject.toml
       - run: pip install .
       - run: python scripts/prune-ingest-logs.py
