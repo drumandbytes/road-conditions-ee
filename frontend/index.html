@@ -56,11 +56,20 @@
   <body>
     <div id="app"></div>
     <script type="module" src="/src/main.tsx"></script>
-    <!-- Cloudflare Web Analytics — cookieless, no consent banner needed. Token is scoped to
-         this hostname only (not the whole drumandbytes.ee zone) via manual JS-snippet install,
-         chosen over the zone-level automatic option so unrelated properties under the same
-         domain aren't opted into tracking. Not a secret — tokens are domain-locked and safe to
-         expose in HTML. -->
-    <script type="module" src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "72c82aa6897748678a9b235e0abd4cd4"}'></script>
+    <!-- Cloudflare Web Analytics is injected at the edge, so there is deliberately no beacon
+         tag here. Cookieless either way, no consent banner needed.
+
+         This reverses the earlier choice of a manual snippet, which was made to keep the token
+         scoped to this hostname rather than opting the whole drumandbytes.ee zone into tracking.
+         That concern turned out to be empty: the zone holds only this project — roadconditions,
+         its tiles subdomain, and api — and the latter two serve JSON and map tiles, which have
+         no HTML to inject into.
+
+         The manual snippet also cost us data. A hand-placed beacon posts cross-origin to
+         cloudflareinsights.com/cdn-cgi/rum, which silently fails for a large share of visitors;
+         the injected one posts same-origin to /cdn-cgi/rum and works. Only the first beacon on a
+         page is used, so this tag was shadowing the working one and under-counting traffic.
+         Don't add one back. -->
+
   </body>
 </html>
