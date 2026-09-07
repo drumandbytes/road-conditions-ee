@@ -19,8 +19,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
-      - run: pip install "pyiceberg[pyarrow]>=0.9,<1"
+          # Version and dependencies both come from pyproject.toml, so a bump is
+          # one edit rather than one here and one in the pip line below.
+          python-version-file: pyproject.toml
+      - run: pip install .
       - run: python scripts/prune-ingest-logs.py
         env:
           CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

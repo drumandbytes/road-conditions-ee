@@ -1,0 +1,17 @@
+[project]
+name = "road-conditions-ee-ops"
+version = "0"
+description = "Operational scripts for road-conditions-ee. Not a published package."
+# The Python version and dependencies for scripts/ live here rather than being
+# repeated in the workflow that runs them: prune-ingest-logs.yml reads this via
+# setup-python's python-version-file, and installs with `pip install .`.
+requires-python = ">=3.12"
+dependencies = ["pyiceberg[pyarrow]>=0.9,<1"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+# Only scripts/ exists; there is no importable package to discover.
+py-modules = []

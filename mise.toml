@@ -4,6 +4,6 @@
 # node 24 is what the reusable deploy workflows use (they note anything >=22 keeps
 # wrangler-action happy; 24 is the actual default they run).
 node = "24"
-# python is only used by prune-ingest-logs.yml, but pinning it here means the one
-# person who ever debugs that job locally gets the version it actually runs under.
-python = "3.12"
+# No python here on purpose: pyproject.toml's requires-python is the source for
+# it, and the workflow reads that via setup-python's python-version-file. Adding
+# it here would be a second place to forget.
