@@ -16,8 +16,8 @@ jobs:
   prune:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           # Version and dependencies both come from pyproject.toml, so a bump is
           # one edit rather than one here and one in the pip line below. Note this
