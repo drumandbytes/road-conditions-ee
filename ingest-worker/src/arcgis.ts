@@ -8,6 +8,8 @@
 import proj4 from "proj4";
 
 const ARCGIS_BASE = "https://tarktee.ee/tarktee/rest/services/tram";
+// Same tarktee.ee origin as tarktee.ts, same gzip-with-chunked-encoding server bug — see the
+// header comment there. Accept-Encoding: identity is required, not optional; don't remove it.
 const HEADERS = {
   "User-Agent": "road-conditions-ee (personal project, contact via tarktee.ee registration)",
   "Accept-Encoding": "identity",
@@ -27,6 +29,12 @@ function transformCoords(x: number, y: number): { lat: number; lng: number } {
   return { lat, lng };
 }
 
+// Well above every layer's real row count (restrictions ~260, weather ~120), so in practice
+// these fetches are single-page — but paginating anyway means a layer that grows past it, or
+// one whose server-side maxRecordCount is lower than expected, degrades to "slower" instead
+// of "silently truncated". vms_traffic_signs overrides this (see VMS_PAGE_SIZE).
+const ARCGIS_PAGE_SIZE = 1000;
+
 interface ArcGisFeature<A> {
   attributes: A;
   geometry: { x: number; y: number } | null;
@@ -43,6 +51,44 @@ async function fetchArcGisJson<A>(url: string): Promise<ArcGisQueryResponse<A>> 
     throw new Error(`ArcGIS request failed: ${url} -> ${res.status} ${res.statusText}`);
   }
   return res.json() as Promise<ArcGisQueryResponse<A>>;
+}
+
+// Pages through a layer's query endpoint, accumulating features. `baseParams` is everything
+// except resultOffset/resultRecordCount (f, outFields, where, orderByFields, …). Stops on the
+// first short/empty page. A failed page request throws (see fetchArcGisJson), so a partial
+// list from a mid-pagination network error never escapes this function — but a 200 with a
+// silently-empty body mid-sequence (the documented vms_traffic_signs behaviour past its
+// offset cap) would, so a genuinely multi-page caller should cross-check the total against
+// fetchLayerCount rather than trusting the length alone.
+async function fetchAllPages<A>(
+  layerUrl: string,
+  baseParams: Record<string, string>,
+  pageSize: number,
+): Promise<ArcGisFeature<A>[]> {
+  const features: ArcGisFeature<A>[] = [];
+  let offset = 0;
+  for (;;) {
+    const params = new URLSearchParams({
+      ...baseParams,
+      resultOffset: String(offset),
+      resultRecordCount: String(pageSize),
+    });
+    const page = await fetchArcGisJson<A>(`${layerUrl}?${params}`);
+    features.push(...page.features);
+    if (page.features.length < pageSize) break;
+    offset += pageSize;
+  }
+  return features;
+}
+
+async function fetchLayerCount(layerUrl: string, where: string): Promise<number> {
+  const params = new URLSearchParams({ f: "json", where, returnCountOnly: "true" });
+  const res = await fetch(`${layerUrl}?${params}`, { headers: HEADERS });
+  if (!res.ok) {
+    throw new Error(`ArcGIS count request failed: ${layerUrl} -> ${res.status} ${res.statusText}`);
+  }
+  const data = (await res.json()) as { count?: number };
+  return data.count ?? 0;
 }
 
 export interface WeatherReading {
@@ -82,9 +128,12 @@ interface WeatherStationAttributes {
 }
 
 export async function fetchWeatherReadings(): Promise<WeatherReading[]> {
-  const url = `${ARCGIS_BASE}/road_weather_stations/MapServer/0/query?f=json&outFields=*&where=1=1`;
-  const data = await fetchArcGisJson<WeatherStationAttributes>(url);
-  return data.features
+  const features = await fetchAllPages<WeatherStationAttributes>(
+    `${ARCGIS_BASE}/road_weather_stations/MapServer/0/query`,
+    { f: "json", outFields: "*", where: "1=1" },
+    ARCGIS_PAGE_SIZE,
+  );
+  return features
     .filter((f) => f.geometry !== null)
     .map((f) => {
       const { lat, lng } = transformCoords(f.geometry!.x, f.geometry!.y);
@@ -146,8 +195,6 @@ interface RestrictionAttributes {
   date_to: number | null;
 }
 
-const ARCGIS_PAGE_SIZE = 1000;
-
 // Mirrors the exact where-clause Tark Tee's own map sends for this layer (captured from its
 // network traffic) — restrictions that haven't ended yet, and start within the next week
 // (so upcoming scheduled works show up, without pulling in the entire multi-year historical
@@ -160,47 +207,35 @@ function activeRestrictionsWhereClause(): string {
   return `(date_from is null or date_from < '${weekOutStr}') and (date_to is null or date_to >= '${nowStr}')`;
 }
 
-async function fetchRestrictionsPage(offset: number): Promise<ArcGisQueryResponse<RestrictionAttributes>> {
-  const params = new URLSearchParams({
-    f: "json",
-    outFields: "*",
-    where: activeRestrictionsWhereClause(),
-    resultOffset: String(offset),
-    resultRecordCount: String(ARCGIS_PAGE_SIZE),
-  });
-  return fetchArcGisJson<RestrictionAttributes>(`${ARCGIS_BASE}/restrictions_traffic/MapServer/0/query?${params}`);
-}
-
 export async function fetchRestrictions(): Promise<Restriction[]> {
+  const features = await fetchAllPages<RestrictionAttributes>(
+    `${ARCGIS_BASE}/restrictions_traffic/MapServer/0/query`,
+    { f: "json", outFields: "*", where: activeRestrictionsWhereClause() },
+    ARCGIS_PAGE_SIZE,
+  );
   const restrictions: Restriction[] = [];
-  let offset = 0;
-  for (;;) {
-    const page = await fetchRestrictionsPage(offset);
-    for (const f of page.features) {
-      if (!f.geometry) continue;
-      const { lat, lng } = transformCoords(f.geometry.x, f.geometry.y);
-      const a = f.attributes;
-      restrictions.push({
-        id: a.objectid,
-        roadNr: a.road_nr,
-        roadName: a.road_name,
-        roadType: a.road_type,
-        cause: a.cause,
-        effect: a.effect,
-        extraInfo: a.extra_info,
-        detourComment: a.detour_comment,
-        contractorOrganization: a.contractor_organization,
-        contractorContactPhone: a.contractor_contact_phone,
-        trafficCtrlOrganization: a.traffic_ctrl_organization,
-        trafficCtrlContactPhone: a.traffic_ctrl_contact_phone,
-        dateFrom: a.date_from ? new Date(a.date_from).toISOString() : null,
-        dateTo: a.date_to ? new Date(a.date_to).toISOString() : null,
-        lat,
-        lng,
-      });
-    }
-    if (!page.exceededTransferLimit || page.features.length < ARCGIS_PAGE_SIZE) break;
-    offset += ARCGIS_PAGE_SIZE;
+  for (const f of features) {
+    if (!f.geometry) continue;
+    const { lat, lng } = transformCoords(f.geometry.x, f.geometry.y);
+    const a = f.attributes;
+    restrictions.push({
+      id: a.objectid,
+      roadNr: a.road_nr,
+      roadName: a.road_name,
+      roadType: a.road_type,
+      cause: a.cause,
+      effect: a.effect,
+      extraInfo: a.extra_info,
+      detourComment: a.detour_comment,
+      contractorOrganization: a.contractor_organization,
+      contractorContactPhone: a.contractor_contact_phone,
+      trafficCtrlOrganization: a.traffic_ctrl_organization,
+      trafficCtrlContactPhone: a.traffic_ctrl_contact_phone,
+      dateFrom: a.date_from ? new Date(a.date_from).toISOString() : null,
+      dateTo: a.date_to ? new Date(a.date_to).toISOString() : null,
+      lat,
+      lng,
+    });
   }
   return restrictions;
 }
@@ -221,42 +256,29 @@ interface DetourAttributes {
   date_to: number | null;
 }
 
-async function fetchDetoursPage(offset: number): Promise<ArcGisQueryResponse<DetourAttributes>> {
-  const params = new URLSearchParams({
-    f: "json",
-    outFields: "*",
-    // Same active-window filter as restrictions — this layer holds the same kind of
-    // multi-year archive (entries back to 2017), and detours only matter tied to a
-    // currently-active restriction anyway.
-    where: activeRestrictionsWhereClause(),
-    resultOffset: String(offset),
-    resultRecordCount: String(ARCGIS_PAGE_SIZE),
-  });
-  return fetchArcGisJson<DetourAttributes>(`${ARCGIS_BASE}/detours/MapServer/0/query?${params}`);
-}
-
 // No geometry parsed here — detours describe the same location as the restriction they're
 // tied to (restriction_id), so api-worker joins them onto the restriction row rather than
 // this becoming a second set of map markers at (near-)duplicate positions.
+//
+// Same active-window filter as restrictions — this layer holds the same kind of multi-year
+// archive (entries back to 2017), and detours only matter tied to a currently-active
+// restriction anyway.
 export async function fetchDetours(): Promise<Detour[]> {
-  const detours: Detour[] = [];
-  let offset = 0;
-  for (;;) {
-    const page = await fetchDetoursPage(offset);
-    for (const f of page.features) {
-      const a = f.attributes;
-      detours.push({
-        id: a.objectid,
-        restrictionId: a.restriction_id,
-        description: a.description,
-        dateFrom: a.date_from ? new Date(a.date_from).toISOString() : null,
-        dateTo: a.date_to ? new Date(a.date_to).toISOString() : null,
-      });
-    }
-    if (!page.exceededTransferLimit || page.features.length < ARCGIS_PAGE_SIZE) break;
-    offset += ARCGIS_PAGE_SIZE;
-  }
-  return detours;
+  const features = await fetchAllPages<DetourAttributes>(
+    `${ARCGIS_BASE}/detours/MapServer/0/query`,
+    { f: "json", outFields: "*", where: activeRestrictionsWhereClause() },
+    ARCGIS_PAGE_SIZE,
+  );
+  return features.map((f) => {
+    const a = f.attributes;
+    return {
+      id: a.objectid,
+      restrictionId: a.restriction_id,
+      description: a.description,
+      dateFrom: a.date_from ? new Date(a.date_from).toISOString() : null,
+      dateTo: a.date_to ? new Date(a.date_to).toISOString() : null,
+    };
+  });
 }
 
 export interface VmsSign {
@@ -298,43 +320,50 @@ interface VmsSignAttributes {
 // deterministic across separate requests.
 const VMS_PAGE_SIZE = 50;
 
-async function fetchVmsSignsPage(offset: number): Promise<ArcGisQueryResponse<VmsSignAttributes>> {
-  const params = new URLSearchParams({
-    f: "json",
-    outFields: "*",
-    where: "1=1",
-    orderByFields: "objectid",
-    resultOffset: String(offset),
-    resultRecordCount: String(VMS_PAGE_SIZE),
-  });
-  return fetchArcGisJson<VmsSignAttributes>(`${ARCGIS_BASE}/vms_traffic_signs/MapServer/0/query?${params}`);
-}
+// The only layer that genuinely spans multiple pages (~150 rows / 50 per page), and the one
+// with the documented "returns 0 past the offset cap" quirk — so a partial fetch here is a
+// real possibility, not theoretical. Cross-check the collected total against the layer's own
+// returnCountOnly: it over-reports by ~30 (the phantom rows above), so require most-of, not
+// all-of. Coming back well short means pagination stopped early on a silently-empty page;
+// letting that through would prune the missing third of the signs and re-notify them next
+// poll. A hard error instead leaves last poll's rows untouched (the step fails, nothing
+// downstream runs) until the feed recovers.
+const VMS_MIN_FRACTION_OF_COUNT = 0.7;
+const VMS_LAYER_URL = `${ARCGIS_BASE}/vms_traffic_signs/MapServer/0/query`;
 
 export async function fetchVmsSigns(): Promise<VmsSign[]> {
+  const [expected, features] = await Promise.all([
+    fetchLayerCount(VMS_LAYER_URL, "1=1"),
+    fetchAllPages<VmsSignAttributes>(
+      VMS_LAYER_URL,
+      { f: "json", outFields: "*", where: "1=1", orderByFields: "objectid" },
+      VMS_PAGE_SIZE,
+    ),
+  ]);
+  if (features.length > 0 && expected > 0 && features.length < expected * VMS_MIN_FRACTION_OF_COUNT) {
+    throw new Error(
+      `VMS fetch looks truncated: got ${features.length} signs, layer reports ${expected}`,
+    );
+  }
+
   const signs: VmsSign[] = [];
-  let offset = 0;
-  for (;;) {
-    const page = await fetchVmsSignsPage(offset);
-    for (const f of page.features) {
-      if (!f.geometry) continue;
-      const { lat, lng } = transformCoords(f.geometry.x, f.geometry.y);
-      const a = f.attributes;
-      signs.push({
-        id: a.objectid,
-        roadNr: a.road_nr,
-        roadName: a.road_name,
-        roadKm: a.road_km,
-        angle: a.angle,
-        speedLimit: a.speed_limit,
-        speedLimitChangedAt: a.speed_limit_changed_at ? new Date(a.speed_limit_changed_at).toISOString() : null,
-        warning: a.warning,
-        warningChangedAt: a.warning_changed_at ? new Date(a.warning_changed_at).toISOString() : null,
-        lat,
-        lng,
-      });
-    }
-    if (page.features.length < VMS_PAGE_SIZE) break;
-    offset += VMS_PAGE_SIZE;
+  for (const f of features) {
+    if (!f.geometry) continue;
+    const { lat, lng } = transformCoords(f.geometry.x, f.geometry.y);
+    const a = f.attributes;
+    signs.push({
+      id: a.objectid,
+      roadNr: a.road_nr,
+      roadName: a.road_name,
+      roadKm: a.road_km,
+      angle: a.angle,
+      speedLimit: a.speed_limit,
+      speedLimitChangedAt: a.speed_limit_changed_at ? new Date(a.speed_limit_changed_at).toISOString() : null,
+      warning: a.warning,
+      warningChangedAt: a.warning_changed_at ? new Date(a.warning_changed_at).toISOString() : null,
+      lat,
+      lng,
+    });
   }
   return signs;
 }

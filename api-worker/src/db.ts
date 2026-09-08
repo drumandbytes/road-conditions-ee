@@ -337,6 +337,17 @@ export async function createLoginToken(
     .prepare(`INSERT INTO login_tokens (token, user_id, expires_at) VALUES (?, ?, datetime('now', ?))`)
     .bind(token, userId, `+${expiresInMinutes} minutes`)
     .run();
+
+  // Opportunistic GC, best-effort — must never fail token creation. Nothing else deletes
+  // login_tokens (a user's rows only cascade away when the account itself is deleted), so
+  // without this the table grows one row per sign-in email forever. Expired tokens are dead
+  // weight: consumeLoginToken already rejects them, and the rate-limit window
+  // (RATE_LIMIT_WINDOW_MINUTES == LOGIN_TOKEN_TTL_MINUTES) never looks back past expiry.
+  try {
+    await db.prepare(`DELETE FROM login_tokens WHERE expires_at < datetime('now')`).run();
+  } catch (err) {
+    console.warn("[api-worker] login_tokens GC skipped:", err instanceof Error ? err.message : err);
+  }
   return token;
 }
 
