@@ -13,6 +13,19 @@ function mockFetchOnceJson(body: unknown) {
   });
 }
 
+// fetchVmsSigns issues a returnCountOnly request alongside the paged fetch (to catch a
+// truncated pagination). This mock answers the count request with `count` and every page
+// request from `pages` in order.
+function mockVmsFetch(count: number, pages: unknown[]) {
+  let pageIdx = 0;
+  return vi.fn().mockImplementation(async (url: string) => {
+    const json = String(url).includes("returnCountOnly=true")
+      ? async () => ({ count })
+      : async () => pages[Math.min(pageIdx++, pages.length - 1)];
+    return { ok: true, status: 200, statusText: "OK", json };
+  });
+}
+
 describe("arcgis.ts", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -113,7 +126,7 @@ describe("arcgis.ts", () => {
   // real dataset (150 of the 180 the service claims via count; the other 30 aren't
   // retrievable by query at all, a discrepancy confirmed directly, not assumed).
   it("parses VMS signs and transforms coordinates", async () => {
-    const fetchMock = mockFetchOnceJson(vmsSignsFixture);
+    const fetchMock = mockVmsFetch(1, [vmsSignsFixture]);
     vi.stubGlobal("fetch", fetchMock);
 
     const signs = await fetchVmsSigns();
@@ -130,29 +143,38 @@ describe("arcgis.ts", () => {
   });
 
   it("stops paginating VMS signs once a page is shorter than the page size", async () => {
-    const fetchMock = mockFetchOnceJson(vmsSignsFixture); // 1 feature, well under the 50-per-page size
+    const fetchMock = mockVmsFetch(1, [vmsSignsFixture]); // 1 feature, well under the 50-per-page size
     vi.stubGlobal("fetch", fetchMock);
 
     await fetchVmsSigns();
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    // one count request + one page request, then stop
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it("requests a second VMS page when the first comes back exactly full", async () => {
     const fullFeature = vmsSignsFixture.features[0];
-    const fullPage = { features: Array(50).fill(fullFeature) };
-    const shortPage = { features: [fullFeature] };
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce({ ok: true, status: 200, statusText: "OK", json: async () => fullPage })
-      .mockResolvedValueOnce({ ok: true, status: 200, statusText: "OK", json: async () => shortPage });
+    const pages = [{ features: Array(50).fill(fullFeature) }, { features: [fullFeature] }];
+    const fetchMock = mockVmsFetch(51, pages);
     vi.stubGlobal("fetch", fetchMock);
 
     const signs = await fetchVmsSigns();
 
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const pageCalls = fetchMock.mock.calls
+      .map((c) => String(c[0]))
+      .filter((u) => !u.includes("returnCountOnly=true"));
+    expect(pageCalls).toHaveLength(2);
     expect(signs).toHaveLength(51);
-    expect(String(fetchMock.mock.calls[1][0])).toContain("resultOffset=50");
-    expect(String(fetchMock.mock.calls[0][0])).toContain("orderByFields=objectid");
+    expect(pageCalls[1]).toContain("resultOffset=50");
+    expect(pageCalls[0]).toContain("orderByFields=objectid");
+  });
+
+  it("throws rather than pruning when VMS pagination comes back well short of the layer count", async () => {
+    // layer reports 150, but pagination only yielded 50 (a mid-sequence empty page) — must
+    // fail the whole fetch so the step errors and nothing downstream prunes the missing rows
+    const fetchMock = mockVmsFetch(150, [{ features: [vmsSignsFixture.features[0]] }]);
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(fetchVmsSigns()).rejects.toThrow(/truncated/);
   });
 });
