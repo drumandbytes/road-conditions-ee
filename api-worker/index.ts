@@ -67,6 +67,24 @@ async function route(request: Request, env: Env, ctx: ExecutionContext): Promise
   const { pathname } = url;
   const { method } = request;
 
+  // Uptime probe target (Blackbox Exporter — see cluster/apps/blackbox-exporter/probes.yaml).
+  // Runs a trivial query so a dropped DB binding or an unavailable D1 fails the check — a bare
+  // 200 from the Worker would stay green with the whole backend dead, the same "frontend-up ≠
+  // backend-up" gap the mystery-games probe's /ready endpoint avoids. Not under /api/ (so the
+  // rate-limit rule doesn't touch it) and deliberately uncached.
+  if (method === "GET" && pathname === "/health") {
+    try {
+      await env.DB.prepare("SELECT 1").first();
+      return new Response("ok\n", { headers: { "content-type": "text/plain; charset=utf-8" } });
+    } catch (err) {
+      console.error("[api-worker] /health DB check failed:", err instanceof Error ? err.message : err);
+      return new Response("db unavailable\n", {
+        status: 503,
+        headers: { "content-type": "text/plain; charset=utf-8" },
+      });
+    }
+  }
+
   // Free, edge-cached reads — no auth required. TTLs sit just under the ingest cron's refresh
   // cadence (3 min for weather/hazards/restrictions, 30 min for cameras), so a hit is never
   // more than one ingest cycle stale.

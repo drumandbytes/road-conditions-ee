@@ -19,6 +19,9 @@ import { authenticatePaidUser, evictAuthCache } from "../src/auth";
 import { getEmailPreferences, updateSubscriptionStatusByStripeCustomerId, updateEmailPreferences, upsertUserFromStripe } from "../src/db";
 import type { UserRow } from "../src/db";
 import { buildUnsubscribeLink, signUnsubscribeToken, verifyUnsubscribeToken } from "../src/unsubscribe";
+import worker from "../index";
+
+const noopCtx = { waitUntil() {}, passThroughOnException() {} } as unknown as ExecutionContext;
 
 /** Minimal D1Database fake — enough of the prepare/bind/all/first chain for these routes,
  *  matching the existing repo's pattern of hand-mocking bindings rather than pulling in
@@ -288,6 +291,24 @@ describe("CORS", () => {
     for (const method of ["GET", "POST", "PATCH", "DELETE"]) {
       expect(methods).toContain(method);
     }
+  });
+});
+
+describe("GET /health", () => {
+  it("returns 200 when the DB query succeeds", async () => {
+    const env = { DB: fakeDb([{ 1: 1 }]) } as unknown as Parameters<typeof worker.fetch>[1];
+    const res = await worker.fetch(new Request("https://api.example/health"), env, noopCtx);
+    expect(res.status).toBe(200);
+    expect(await res.text()).toBe("ok\n");
+  });
+
+  it("returns 503 when the DB query throws (dropped binding / D1 unavailable)", async () => {
+    const brokenDb = {
+      prepare: () => ({ first: async () => { throw new Error("D1_ERROR: no such table"); } }),
+    } as unknown as D1Database;
+    const env = { DB: brokenDb } as unknown as Parameters<typeof worker.fetch>[1];
+    const res = await worker.fetch(new Request("https://api.example/health"), env, noopCtx);
+    expect(res.status).toBe(503);
   });
 });
 
