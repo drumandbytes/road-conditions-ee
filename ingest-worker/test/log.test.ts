@@ -1,5 +1,5 @@
 import type { Pipeline } from "cloudflare:pipelines";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { log, sendToStream } from "../src/log";
 
 describe("log.ts", () => {
@@ -20,5 +20,19 @@ describe("log.ts", () => {
     await sendToStream(stream, entry);
 
     expect(sendCalls).toEqual([[entry]]);
+  });
+
+  it("swallows a rejected send so a transient pipeline error can't fail the poll cycle", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const stream = {
+      send: async () => { throw new Error("Internal error in Durable Object storage caused object to be reset"); },
+    } as unknown as Pipeline;
+
+    await expect(
+      sendToStream(stream, { ts: "2026-07-26T11:30:34.941Z", level: "WARN", event: "pollFast" }),
+    ).resolves.toBeUndefined();
+    expect(consoleError).toHaveBeenCalledOnce();
+
+    consoleError.mockRestore();
   });
 });

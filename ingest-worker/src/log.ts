@@ -28,5 +28,21 @@ export function log(level: LogLevel, event: string, extra: Record<string, unknow
 }
 
 export async function sendToStream(stream: Pipeline, entry: LogEntry): Promise<void> {
-  await stream.send([entry]);
+  // Best-effort: Pipelines is DO-backed, so a transient "Durable Object storage caused
+  // object to be reset" surfaces here. Dropping one cycle summary is fine (the next poll
+  // writes a fresh one) — it must not fail the whole scheduled run. A sustained failure
+  // still shows up via this console.error in observability.
+  // ponytail: swallow-and-log, no retry — the 3/30-min cron cadence is the retry.
+  try {
+    await stream.send([entry]);
+  } catch (err) {
+    console.error(
+      JSON.stringify({
+        ts: new Date().toISOString(),
+        level: "ERROR",
+        event: "sendToStream.failed",
+        error: err instanceof Error ? err.message : String(err),
+      }),
+    );
+  }
 }
